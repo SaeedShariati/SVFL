@@ -689,7 +689,6 @@ void Thss_Share(DscThss *thss)
         mpz_init(thss->shares_x[i]);
         mpz_init(thss->shares_y[i]);
         mpz_set(thss->shares_x[i], x);
-
         mpz_set_ui(thss->shares_y[i], 0);
         mpz_t term;
         mpz_init(term);
@@ -701,10 +700,12 @@ void Thss_Share(DscThss *thss)
             mpz_mod(thss->shares_y[i], thss->shares_y[i], thss->prime);
         }
         mpz_clear(term);
-
-
     }
-      mpz_clear(x);
+    mpz_clear(x);
+    for(int i =0; i<thss->threshold;i++){
+        mpz_clear(thss->coeffs[i]);
+    }
+    free(thss->coeffs);
 }
 void Thss_ReCons(DscThss *thss)
 {
@@ -738,7 +739,12 @@ void Thss_ReCons(DscThss *thss)
         mpz_add(thss->recovered_secret, thss->recovered_secret, term);
         mpz_mod(thss->recovered_secret, thss->recovered_secret, thss->prime);
     }
-
+    for (int i = 0; i < thss->threshold; i++) {
+        mpz_clear(thss->shares_x[i]);
+        mpz_clear(thss->shares_y[i]);
+    }
+    free(thss->shares_x);
+    free(thss->shares_y);
     mpz_clear(term);
     mpz_clear(numerator);
     mpz_clear(denominator);
