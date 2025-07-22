@@ -616,9 +616,9 @@ void UNPADDING_Message(DscPADD *padd) {
 }
 //###############################
 
-
-//###### Thrss=(Share,ReConst) (Shamir Secret Sharing)
+//initializes rndelement with a random value less than thss->prime
 void generate_random_mpz(DscThss *thss, mpz_ptr rndelement) {
+    /*
     gmp_randstate_t state;
     gmp_randinit_default(state);
     time_t t;
@@ -629,7 +629,49 @@ void generate_random_mpz(DscThss *thss, mpz_ptr rndelement) {
     mpz_urandomm(rndelement, state, thss->prime);
     //mpz_set(,tmp);
     gmp_randclear(state);
+    */
+    mpz_t random_number;
+    mpz_init(random_number);
+
+    // Initialize LibTomCrypt PRNG
+    int prng_idx = register_prng(&sprng_desc);
+    if (prng_idx == -1) {
+        fprintf(stderr, "Error registering sprng\n");
+    }
+
+    prng_state prng;
+    if (sprng_start(&prng) != CRYPT_OK ||
+        sprng_ready(&prng) != CRYPT_OK) {
+        fprintf(stderr, "Error initializing sprng\n");
+    }
+
+    size_t num_bytes = (mpz_sizeinbase(thss->prime, 2) + 7) / 8;
+    unsigned char *buffer = malloc(num_bytes);
+    if (!buffer) {
+        fprintf(stderr, "Memory allocation failed\n");
+    }
+
+    mpz_t temp;
+    mpz_init(temp);
+
+    do {
+        // Generate cryptographically secure random bytes
+        if (sprng_read(buffer, num_bytes, NULL) != num_bytes) {
+            fprintf(stderr, "sprng_read failed\n");
+            free(buffer);
+        }
+
+        // Convert buffer to mpz_t
+        mpz_import(temp, num_bytes, 1, 1, 0, 0, buffer);
+
+    } while (mpz_cmp(temp, thss->prime) > 0); // Retry if temp > q
+
+    mpz_set(rndelement, temp);
+
+    mpz_clear(temp);
+    free(buffer);
 }
+//###### Thrss=(Share,ReConst) (Shamir Secret Sharing)
 void Thss_Config(DscThss *thss, int secparam_bits, int total, int threshold)
 {
     thss->num_bits=secparam_bits;
