@@ -18,8 +18,8 @@ gcc VNet.c VNet.c -o VNet -I ~/.local/include/pbc -L ~/.local/lib -Wl,-rpath ~/.
    -lgmp -l tomcrypt -l m
 
 *********************************************************************************************************************************************/
-#define GRAD_SIZE 200
-#define USERS_SIZE 100
+#define GRAD_SIZE 20
+#define USERS_SIZE 30
 #define SEC_PARAM  16
 
 typedef struct {
@@ -224,7 +224,7 @@ void VNET_KeyShare(DscVNet *vnet, int i)
    generate_random_mpz_vnet(vnet, vnet->Users[i].betaVerify);
 
    size_t count;
-   unsigned char *temp1, *temp2, *temp3;
+   unsigned char /* *temp1, *temp2,*/ *temp3;
    unsigned char *str1 = malloc(16 * sizeof(unsigned char));
    unsigned char *str2 = malloc(16 * sizeof(unsigned char));
    unsigned char *tmpstr1 = malloc(512 * sizeof(unsigned char));
@@ -591,7 +591,7 @@ void VNET_Vrfy(DscVNet *vnet, int i)
       if (maskTagPrime[j] != vnet->tagGlobalVector[j]) {
          vrfy = false;
 
-         printf("%ld , %ld \n", maskTagPrime[j], vnet->tagGlobalVector[j]);
+         printf("%d , %d \n", maskTagPrime[j], vnet->tagGlobalVector[j]);
          break;
       }
    }

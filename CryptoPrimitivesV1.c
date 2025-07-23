@@ -117,7 +117,7 @@ void PRG_Config(DscPRG *prg, int secparam, int size)
 }
 void PRG_SeedGen(DscPRG *prg)
 {
-    (&(prg->hmac))->secparam=16;
+    (&(prg->hmac))->secparam=prg->secparam;
     (&(prg->hmac))->plaintextInput = (unsigned char *)malloc(strlen("An inital value          ") + 1);
     strcpy((&(prg->hmac))->plaintextInput, "An inital value          ");
     (&(prg->hmac))->DigestOutput=malloc((&(prg->hmac))->secparam);
@@ -145,22 +145,16 @@ void PRG_Eval(DscPRG *prg) {
         //printf("\nCounter: %d\n", counter); //(prg->hmac).secparam);
         sprintf(counter_str, "%d", counter);
         memcpy(prg->hmac.plaintextInput + 16, &counter_str, 5);
-        printf("plaintext:\n %s",prg->hmac.plaintextInput);
+        printf("\nplaintext: %s",prg->hmac.plaintextInput);
         // Compute HMAC with the current counter as input        
         HMAC_Eval(&(prg->hmac));
         
         // Determine how many bytes to copy to output
         bytes_to_copy = (remaining < temp_output_len) ? remaining : temp_output_len;
-        printf("\nDetermine how many bytes to copy to output");
-        printf("\nbytes_to_copy: %d\n", bytes_to_copy);
-        fflush(stdout);
-        
+        printf("\nbytes_to_copy: %lu", bytes_to_copy);
+        printf("\nremaining: %lu\n", remaining);
         // Copy the HMAC output to the final output buffer {
         memcpy(prg->randomOutput + generated, prg->hmac.DigestOutput, bytes_to_copy);
-
-        printf("\nCopy the HMAC output to the final output buffer");
-        
-  
 
         // Update counters
         generated += bytes_to_copy;
@@ -229,37 +223,42 @@ void GroupGen_Config(DscGrp *grp)
     mpz_init(grp->generator);
     mpz_init(grp->order);
 }
-void generate_prime(DscGrp *grp) {
-    gmp_randinit_default(grp->state);
-    gmp_randseed_ui(grp->state, time(NULL)); // Seed the random number generator
-
-    // Generate a random prime number
-    mpz_urandomb(grp->prime, grp->state, grp->secparam);
-    mpz_nextprime(grp->prime, grp->prime); // Find the next prime number
-}
-void find_generator(DscGrp *grp) {
-    mpz_sub_ui(grp->order, grp->prime, 1); // Order of the group is p - 1
-
-    // Find a generator (this is a simple method, not optimized)
-    for (mpz_set_ui(grp->generator, 2); mpz_cmp(grp->generator, grp->prime) < 0; mpz_add_ui(grp->generator, grp->generator, 1)) {
-        mpz_t power;
-        mpz_init(power);
-        mpz_powm(power, grp->generator, grp->order, grp->prime); // g^(p-1) mod p
-
-        if (mpz_cmp_ui(power, 1) == 0) {
-            // Found a generator
-            mpz_clear(power);
-            return;
-        }
-        mpz_clear(power);
-    }
-
-    mpz_set_ui(grp->generator, 0); // If no generator found, set to 0
-}
 void GroupGen(DscGrp *grp)
 {
-    generate_prime(grp);
-    find_generator(grp);
+    // Generate a random safe prime number (p = 2q + 1)
+    mpz_t p, q, test;
+    gmp_randinit_default(grp->state);
+    gmp_randseed_ui(grp->state, time(NULL));
+    mpz_inits(q, test, NULL);
+
+    while (1) {
+        // Generate random 511-bit prime q
+        mpz_urandomb(q,  grp->state, grp->secparam-1);
+        mpz_setbit(q, grp->secparam-2); // ensure it's secparam-1 bits
+
+        mpz_nextprime(q, q);
+
+        // Compute p = 2q + 1
+        mpz_mul_ui(grp->prime, q, 2);
+        mpz_add_ui(grp->prime, grp->prime, 1);
+
+        // Test if p is prime
+        if (mpz_probab_prime_p(grp->prime, 25) > 0) {
+            // Found safe prime
+            // Test if g=2 is a valid generator:
+            // Check that g^q mod p != 1
+            mpz_set_ui(test, 2);
+            mpz_powm(test, test, q, grp->prime);
+
+            if (mpz_cmp_ui(test, 1) != 0) {
+                mpz_set_ui(grp->generator,2);
+                break;
+            }
+        }
+
+    }
+
+    mpz_clears(q, test, NULL);
 }
 //###############################
 
@@ -477,7 +476,7 @@ void DS_KeyGen(DscDS *ds)
 }
 void DS_Sign(DscDS *ds)
 {
-    char *str=malloc(64*sizeof(char));
+    char *str=malloc(64*sizeof(char)); //needs changing (if prime greater than 64 bytes)
     mpz_t k;
     mpz_init(k); 
     mpz_urandomm(k,ds->grp.state, ds->grp.generator);
@@ -492,8 +491,10 @@ void DS_Sign(DscDS *ds)
     gmp_sprintf(str,"%02x",I);
 
 
-
-    sprintf(str,"%s%s",str,ds->plaintextInput);
+    char tmp[64];
+    strcpy(tmp, str);
+    sprintf(str, "%s%s", tmp, ds->plaintextInput);
+    //sprintf(str,"%s%s",str,ds->plaintextInput);
  
 
 
@@ -503,6 +504,7 @@ void DS_Sign(DscDS *ds)
     }
 
     strcpy((char *)ds->hash.plaintextInput,str);
+    free(str);
     Hash_Eval(&(ds->hash));
 
 
@@ -518,7 +520,7 @@ void DS_Sign(DscDS *ds)
 }
 void DS_Vrfy(DscDS *ds)
 {
-    char *str=malloc(64 * sizeof(char));
+    char *str=malloc(64 * sizeof(char)); //needs changing if prime > 64
 
     mpz_t temp1,temp2,temp3,temp4;
     mpz_init(temp1);
@@ -535,13 +537,14 @@ void DS_Vrfy(DscDS *ds)
     mpz_mod(temp3, temp3, ds->grp.prime);
     
 
-    size_t count;
+    //size_t count;
     //mpz_export(str, &count, 1, sizeof(char), 0, 0, temp3);
     gmp_sprintf(str,"%02x",temp3);
 
 
-
-    sprintf(str,"%s%s",str,ds->plaintextInput);
+    char t[64];
+    strcpy(t,str);
+    sprintf(str,"%s%s",t,ds->plaintextInput);
     //strcat(str,ds->plaintextInput);
     
 
@@ -565,6 +568,10 @@ void DS_Vrfy(DscDS *ds)
     {
         ds->isValid=false;
     }
+    mpz_clear(temp1);
+    mpz_clear(temp2);
+    mpz_clear(temp3);
+    mpz_clear(temp4);
 }
 //###############################
 
@@ -945,7 +952,6 @@ void KAgree_Gen(DscKAgree *kagree, int uid)
         gmp_randstate_t state;
         gmp_randinit_default(state);
         time_t t;
-        mpz_t *tmp;
         srand((unsigned) time(&t));
         unsigned long seed = rand();
         gmp_randseed_ui(state, seed);
