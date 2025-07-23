@@ -18,8 +18,8 @@ gcc VNet.c VNet.c -o VNet -I ~/.local/include/pbc -L ~/.local/lib -Wl,-rpath ~/.
    -lgmp -l tomcrypt -l m
 
 *********************************************************************************************************************************************/
-#define GRAD_SIZE 300
-#define USERS_SIZE 200
+#define GRAD_SIZE 200
+#define USERS_SIZE 100
 #define SEC_PARAM  16
 
 typedef struct {
@@ -229,7 +229,7 @@ void VNET_KeyShare(DscVNet *vnet, int i)
    unsigned char *str2 = malloc(16 * sizeof(unsigned char));
    unsigned char *tmpstr1 = malloc(512 * sizeof(unsigned char));
 
-   vnet->Users[i].hash.plaintextInput = malloc( 128 * sizeof(char));
+   vnet->Users[i].hash.plaintextInput = calloc(128, sizeof(char));
    for (int z = 0; z < vnet->numClients; z++) {
       //assert(vnet->Users[i].hash.plaintextInput != NULL); failed
       //temp2 = realloc(vnet->Users[i].hash.plaintextInput, 128 * sizeof(char));
@@ -238,8 +238,7 @@ void VNET_KeyShare(DscVNet *vnet, int i)
       //}
       mpz_export(vnet->Users[i].hash.plaintextInput, &count, 1, sizeof(char), 0, 0,
                  vnet->Users[i].kagree.sharedSecret[z]);
-      vnet->Users[i].hash.plaintextInput[count] = '\0';
-
+      vnet->Users[i].hash.plaintextInput[127] = '\0';            
       //temp1 = realloc(vnet->Users[i].hash.DigestOutput, 256 * sizeof(char));
       //if (temp1 != NULL) {
       //   vnet->Users[i].hash.DigestOutput = temp1;
@@ -599,7 +598,7 @@ void VNET_Vrfy(DscVNet *vnet, int i)
    if (vrfy)
       printf("valid\n");
    else
-      printf("invalid");
+      printf("invalid\n");
 }
 
 void randomly_zero_out(uint8_t *dest, uint8_t *src, size_t size, double percentage)
@@ -650,7 +649,6 @@ int main()
    printf("\n\n");
 */
 
-/* Previous Code
    DscTimeMeasure timemeasure;
 
    DscPRG prg;
@@ -701,30 +699,5 @@ int main()
 
    VNET_UNMask(&vnet, &prg);
    VNET_Vrfy(&vnet, 1);
-
-
-   
-   // VNET_Vrfy(&vnet, 2);
-   /*  for(int j=0;j<vnet.grdSize;j++){
-      printf("%d\t", vnet.Users[16].plainLocalVector[j]);
-    } */
-
-   DscThrCrypt thrcrypt;
-    ThrCrypt_Config(&thrcrypt,128,5,3);
-    ThrCrypt_DKeyGen(&thrcrypt);
-
-    printf("\n PlaintextInput: %s\n",thrcrypt.plaintextInput);
-    
-
-    ThrCrypt_ENC(&thrcrypt);
-
-   mpz_out_str(stdout, 10, thrcrypt.input);
-
-    ThrCrypt_Dec(&thrcrypt);
-
-    printf("\n PlaintextOutput: %s\n",thrcrypt.plaintextOutput);
-
-    mpz_out_str(stdout, 10, thrcrypt.dectypted);
-    printf("\n");
    return 0;
 }
