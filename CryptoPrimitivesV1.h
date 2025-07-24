@@ -202,7 +202,7 @@ typedef struct {
 /*Structure Definition For Key Aggrement Protocol (Between Two parties)*/
 typedef struct
 {
-    int uid;//Assigned in range [1..numUsers]
+    int uid;//Assigned in range [0..numUsers-1]
     mpz_t skey;
     mpz_t pkey;
 }DscUser;
@@ -624,10 +624,10 @@ void UNPADDING_Message(DscPADD *padd);
 
 
 //###### Thrss=(Share,ReConst) (Shamir Secret Sharing) ########################
-void generate_random_mpz(DscThss *thss, mpz_ptr rndelement);
+void generate_random_mpz(mpz_ptr prime, mpz_ptr rndelement);
 void Thss_Config(DscThss *thss, int secparam_bits, int total, int threshold);
-void Thss_KeyGen(DscThss *thss);
-void Thss_Share(DscThss *thss);
+void Thss_KeyGen(DscThss *thss, mpz_ptr prime);
+void Thss_Share(DscThss *thss, mpz_ptr secret);
 void Thss_ReCons(DscThss *thss); 
 /*++++++++++++++ Test Program - Thrss +++++++++++ 
     DscThss thss;
@@ -695,62 +695,4 @@ void ThrCrypt_Dec(DscThrCrypt *thrcrypt);
     mpz_out_str(stdout, 10, thrcrypt.dectypted);
 +++++++++++++++++++++++++++++++++++++++++++++++++*/
 //#############################################################################
-
-
-//###### KAgree=(Setup,Gen,Agree) (In Group G1, and between two parties #######
-void KAgree_Config(DscKAgree *kagree);
-void KAgree_Setup(DscKAgree *kagree);
-void KAgree_Gen(DscKAgree *kagree, int uid);
-void KAgree_Agree(DscKAgree *kagree,int MyUid, int OthUid);
-/*++++++++++++++ Test Program - DscThrCrypt +++++*
-    DscKAgree kagree;
-    KAgree_Config(&kagree);
-
-    KAgree_Setup(&kagree);
-    gmp_printf("generator:  %B\n", kagree.grp.generator);
-
-    KAgree_Gen(&kagree,0);
-    KAgree_Gen(&kagree,1);
-    gmp_printf("sky0:  %B\n", kagree.user[0].skey);
-    gmp_printf("pky1:  %B\n", kagree.user[1].pkey);
-
-    KAgree_Agree(&kagree,0,1);
-    gmp_printf("Shared Key:  %B\n", kagree.sharedSecret[0][1]);
-+++++++++++++++++++++++++++++++++++++++++++++++++*/
-//#############################################################################
-
-
-//###### KAgreeV1=(Setup,Gen,Agree) (In Group G1, and between two parties #######
-void generate_random_mpz_kagree(DscKAgreeV1 *kagree, mpz_ptr rndelement);
-void KAgreeV1_Config(DscKAgreeV1 *kagree);
-void KAgreeV1_Setup(DscKAgreeV1 *kagree);
-void KAgreeV1_Gen(DscKAgreeV1 *kagree);
-void KAgreeV1_Agree(DscKAgreeV1 *kagree);
-/*++++++++++++++ Test Program - DscKAgreeV1 ++++++
-    DscKAgreeV1 kagree;
-    KAgreeV1_Config(&kagree);
-    KAgreeV1_Setup(&kagree);
-    KAgreeV1_Gen(&kagree);
-    KAgreeV1_Agree(&kagree);
-   
-
-    gmp_printf("Secret Key:  %B\n", kagree.skey);
-
-    printf("\n------------------------------------------------\n");
-
-    for (int i = 0; i < kagree.numUsers; i++)
-    {
-       gmp_printf("Public Key:  %B\n", kagree.pkey[i]);
-    }
-
-    printf("\n------------------------------------------------\n");
-
-    for (int i = 0; i < kagree.numUsers; i++)
-    {
-       gmp_printf("Shared Key:  %B\n", kagree.sharedSecret[i]);
-    }
-+++++++++++++++++++++++++++++++++++++++++++++++++*/
-//#############################################################################
-//===========================================  FUNCTION PROTOTYPE  =================================
-
 #endif 

@@ -18,20 +18,19 @@ gcc VNet.c VNet.c -o VNet -I ~/.local/include/pbc -L ~/.local/lib -Wl,-rpath ~/.
    -lgmp -l tomcrypt -l m
 
 *********************************************************************************************************************************************/
-#define GRAD_SIZE 20
-#define USERS_SIZE 30
+#define GRAD_SIZE 123
+#define USERS_SIZE 173
 #define SEC_PARAM  16
 
 typedef struct {
    int Uid; // Unique ID for the user
    unsigned char *vk;
-   DscKAgreeV1 kagree;
    mpz_t skey;
    mpz_t pkey;
    mpz_t shares_x;      // id related to thss
    mpz_t shares_y;      // secret share related to thss
    mpz_t pkey_thrcrypt; // public key related to cryptthss
-
+   mpz_t *sharedSecret; // shared secret of this user with other users
    int *plainLocalVector;
    int32_t *maskedLocalVector;
    int32_t *maskTag;
@@ -100,23 +99,19 @@ void VNET_Config(DscVNet *vnet)
    // Allocate memory for the array of users
 
    vnet->Users = malloc(vnet->numClients * sizeof(DscClient));
-   // vnet->Users = malloc(vnet->numClients * 100000);
 
    // THRCRYPT
    ThrCrypt_Config(&(vnet->thrcrypt), vnet->secparam * 8, vnet->numClients, vnet->thrshld);
 
    // Initialize each user's UID and random gradients
    for (int i = 0; i < vnet->numClients; i++) {
-      vnet->Users[i].Uid = i; // Example: Assign UIDs from 1 to numClients
+      vnet->Users[i].sharedSecret = malloc(vnet->numClients*sizeof(mpz_t));
+      vnet->Users[i].Uid = i; // Example: Assign UIDs from 0 to numClients-1
 
       // Phase 1: All users active (100%)
       vnet->Uact1[i] = 1;
 
-      vnet->Users[i].kagree.numUsers = vnet->numClients;
-      vnet->Users[i].kagree.secparam = vnet->secparam;
-      KAgreeV1_Config(&(vnet->Users[i].kagree));
-
-      vnet->Users[i].vk = calloc(vnet->secparam, sizeof(unsigned char *));
+      vnet->Users[i].vk = calloc(vnet->secparam+1, sizeof(unsigned char *));
       strncpy((char *)vnet->Users[i].vk, "This is a test for verification key",vnet->secparam);
       vnet->Users[i].vk[vnet->secparam] = '\0';
 
@@ -159,7 +154,7 @@ void VNET_Config(DscVNet *vnet)
          printf("Memory allocation failed for vnet->Users[i].P\n");
          return;
       }
-      //changed 128 to 16
+
       vnet->Users[i].k_p = malloc(sizeof(int));
       vnet->Users[i].k_s_i = malloc(sizeof(int));
    }
@@ -180,12 +175,6 @@ void VNET_Init(DscVNet *vnet)
 
    for (int i = 0; i < vnet->numClients; i++) {
 
-      mpz_set(vnet->Users[i].kagree.grp.generator, vnet->grp.generator);
-      mpz_set(vnet->Users[i].kagree.grp.order, vnet->grp.order);
-      mpz_set(vnet->Users[i].kagree.grp.prime, vnet->grp.prime);
-       //mpz_set(vnet->Users[i].kagree.grp.state,vnet->grp.state);
-
-      vnet->Users[i].kagree.grp.secparam = vnet->grp.secparam;
       generate_random_mpz_vnet(vnet, vnet->Users[i].skey);
 
       mpz_powm(vnet->Users[i].pkey, (vnet->grp).generator, vnet->Users[i].skey, vnet->grp.prime);
@@ -193,26 +182,23 @@ void VNET_Init(DscVNet *vnet)
       // gmp_printf("\nskey %Zd\n\n",vnet->Users[i].skey);
 
       // thcrypt
-      mpz_init(vnet->Users[i].pkey_thrcrypt);
-      mpz_init(vnet->Users[i].shares_x);
-      mpz_init(vnet->Users[i].shares_y);
-
+      mpz_inits(vnet->Users[i].pkey_thrcrypt,vnet->Users[i].shares_x,vnet->Users[i].shares_y,
+         vnet->Users[i].betaMasked,vnet->Users[i].betaVerify,NULL);
       mpz_set(vnet->Users[i].pkey_thrcrypt, vnet->thrcrypt.pkey);
       mpz_set(vnet->Users[i].shares_x, vnet->thrcrypt.thss.shares_x[i]);
       mpz_set(vnet->Users[i].shares_y, vnet->thrcrypt.thss.shares_y[i]);
 
-      mpz_init(vnet->Users[i].betaMasked);
-      mpz_init(vnet->Users[i].betaVerify);
    }
 
-   // printf("\n %d ok\n",vnet->numClients);
+
    for (int i = 0; i < vnet->numClients; i++) {
-      for (int j = 0; j < vnet->numClients; j++) {
-         // gmp_printf("\ngmp %d: %Zd\n",i ,vnet->Users[i].pkey);
-         mpz_init(vnet->Users[i].kagree.sharedSecret[j]);
-         mpz_powm(vnet->Users[i].kagree.sharedSecret[j], vnet->Users[j].pkey,
+      for (int j = i; j < vnet->numClients; j++) {
+         mpz_init(vnet->Users[i].sharedSecret[j]);
+         mpz_init(vnet->Users[j].sharedSecret[i]);
+         mpz_powm(vnet->Users[i].sharedSecret[j], vnet->Users[j].pkey,
              vnet->Users[i].skey, vnet->grp.prime);
-         // gmp_printf("\ngmp %d: %Zd\n",j ,vnet->Users[i].kagree.sharedSecret[j]);
+         mpz_powm(vnet->Users[j].sharedSecret[i], vnet->Users[i].pkey,
+             vnet->Users[j].skey, vnet->grp.prime);
       }
    }
 }
@@ -236,8 +222,8 @@ void VNET_KeyShare(DscVNet *vnet, int i)
       //if (temp2 != NULL) {
       //   vnet->Users[i].hash.plaintextInput = temp2;
       //}
-      mpz_export(vnet->Users[i].hash.plaintextInput, &count, 1, sizeof(char), 0, 0,
-                 vnet->Users[i].kagree.sharedSecret[z]);
+      mpz_export(vnet->Users[i].hash.plaintextInput, &count, 1, sizeof(char), 0, 0, //this requires sharedSecret[i][i] to exist
+                 vnet->Users[i].sharedSecret[z]);
       vnet->Users[i].hash.plaintextInput[127] = '\0';            
       //temp1 = realloc(vnet->Users[i].hash.DigestOutput, 256 * sizeof(char));
       //if (temp1 != NULL) {
@@ -699,5 +685,12 @@ int main()
 
    VNET_UNMask(&vnet, &prg);
    VNET_Vrfy(&vnet, 1);
+      clock_gettime(CLOCK_MONOTONIC, (&(timemeasure.end)));
+   Time_Measure(&timemeasure);
+   printf("\nElapsed Time for Verify and Unmask Function is as below:\n");
+   printf("In Seconds: %ld\n", timemeasure.seconds);
+   printf("In Milliseconds: %ld\n", timemeasure.milliseconds);
+   printf("In Microseconds: %ld\n", timemeasure.microseconds);
+   printf("In Nanoseconds: %ld\n\n", timemeasure.nanoseconds);
    return 0;
 }
