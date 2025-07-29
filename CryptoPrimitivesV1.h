@@ -1,7 +1,9 @@
 #ifndef CryptoPrimitivesV1
 #define CryptoPrimitivesV1
 
-
+#include <gmp.h>
+#include <pbc/pbc.h>
+#include <stdbool.h>
 
 
 /*===######### OUR IMPLEMENTATION CONTAIN BELOW CRYPTOGRAPHIC PRIMITIVES #########===
@@ -193,8 +195,8 @@ typedef struct {
     mpz_t input; // input in format a point on curve
     mpz_t output1; // output [part1] in format a point on curve
     mpz_t output2; // output [part2] in format a point on curve
-    mpz_t dectypted; // plaintext (after decryption) in format a point on curve
-    mpz_t *partialDectypted;//this parameter determines partial decryption done by each party
+    mpz_t decrypted; // plaintext (after decryption) in format a point on curve
+    mpz_t *partialDecrypted;//this parameter determines partial decryption done by each party
     char *plaintextInput; // plaintext (befor encryption) in format string
     char *plaintextOutput; // plaintext (after decryption) in format string
     DscThss thss;//Description Threshold Secret Sharing
@@ -438,6 +440,7 @@ void Hash_Eval(DscHash *hash);
 //############ GroupGen (GMP) ##################################################
 void GroupGen_Config(DscGrp *grp);
 void GroupGen(DscGrp *grp);
+void GroupGen_Free(DscGrp *grp);
 /*++++++++++ Test Program - GroupGen +++++++++++ 
     DscGrp grp;
     GroupGen_Config(&grp);
@@ -640,6 +643,7 @@ void Thss_Config(DscThss *thss, int secparam_bits, int total, int threshold);
 void Thss_KeyGen(DscThss *thss, mpz_ptr prime);
 void Thss_Share(DscThss *thss, mpz_ptr secret);
 void Thss_ReCons(DscThss *thss); 
+void Thss_Free(DscThss *thss);
 /*++++++++++++++ Test Program - Thrss +++++++++++ 
     DscThss thss;
     Thss_Config(&thss,256,5,3);
@@ -683,27 +687,28 @@ void Thss_ReCons(DscThss *thss);
 
 
 //###### ThrCrypt=(DKeyGen,Enc,Dec) (Shamir Secret Sharing)####################
-void ThrCrypt_Config(DscThrCrypt *thrcrypt,int secparam_bits,int total, int thrshld);
-void ThrCrypt_DKeyGen(DscThrCrypt *thrcrypt);
-void ThrCrypt_ENC(DscThrCrypt *thrcrypt);
+void ThrCrypt_Config(DscThrCrypt *thrcrypt,u_int16_t secparam_bits,u_int16_t total, u_int16_t threshold);
+void ThrCrypt_DKeyGen(DscThrCrypt *thrcrypt, mpz_ptr prime);
+void ThrCrypt_ENC(DscThrCrypt *thrcrypt,char* plaintext, u_int32_t size);
 void ThrCrypt_Dec(DscThrCrypt *thrcrypt);
+void ThrCrypt_Free(DscThrCrypt *thrcrypt);
+void encode_bytes_as_mpz(mpz_ptr rop, char *byteArray, u_int32_t size);
+void decode_mpz_as_byteArray(char** rop, mpz_ptr integer);
 /*++++++++++++++ Test Program - DscThrCrypt +++++ 
     DscThrCrypt thrcrypt;
-    ThrCrypt_Config(&thrcrypt,128,5,3);
-    ThrCrypt_DKeyGen(&thrcrypt);
-
-    printf("\n PlaintextInput: %s\n",thrcrypt.plaintextInput);
-    
-
-    ThrCrypt_ENC(&thrcrypt);
-
-     mpz_out_str(stdout, 10, thrcrypt.input);
-
+    char secret[]= "eiojwledewkf394\0";
+    ThrCrypt_Config(&thrcrypt,512,5,3);
+    ThrCrypt_DKeyGen(&thrcrypt,NULL);
+    ThrCrypt_ENC(&thrcrypt,secret,sizeof(secret));
     ThrCrypt_Dec(&thrcrypt);
+    printf("\nPlaintextInput:\n %s\n",secret);
 
-    printf("\n PlaintextOutput: %s\n",thrcrypt.plaintextOutput);
-
-    mpz_out_str(stdout, 10, thrcrypt.dectypted);
+    printf("\nPlaintextOutput:\n %s\n",thrcrypt.plaintextOutput);
+    for(int i =0;i<3;i++){
+        printf("partial decryption[%d] :",i);
+        gmp_printf(" %Zx\n",thrcrypt.partialDecrypted[i]);
+    }
+    ThrCrypt_Free(&(thrcrypt));
 +++++++++++++++++++++++++++++++++++++++++++++++++*/
 //#############################################################################
 #endif 

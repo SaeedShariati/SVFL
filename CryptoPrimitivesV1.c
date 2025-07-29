@@ -1,809 +1,780 @@
-#include <sys/types.h>
-#include <tomcrypt.h>
+#include "CryptoPrimitivesV1.h"
 #include <gmp.h>
 #include <pbc/pbc.h>
-#include <unistd.h>
-#include <string.h>
-#include <time.h>
 #include <stdbool.h>
-#include "CryptoPrimitivesV1.h"
+#include <stddef.h>
+#include <stdio.h>
+#include <string.h>
+#include <sys/types.h>
+#include <time.h>
+#include <tomcrypt.h>
+#include <unistd.h>
 
+// ############ Time Measurement ############
+void Time_Measure(DscTimeMeasure *time) {
+  time->seconds = time->end.tv_sec - time->start.tv_sec;
+  time->nanoseconds = time->end.tv_nsec - time->start.tv_nsec;
 
+  if (time->nanoseconds < 0) {
+    time->seconds -= 1;
+    time->nanoseconds += 1000000000;
+  }
 
-//############ Time Measurement ############
-void Time_Measure(DscTimeMeasure *time)
-{
-    time->seconds = time->end.tv_sec - time->start.tv_sec;
-    time->nanoseconds = time->end.tv_nsec - time->start.tv_nsec;
-
-    if (time->nanoseconds < 0) {
-        time->seconds -= 1;
-        time->nanoseconds += 1000000000;
-    }
-
-   
-    time->milliseconds = time->seconds * 1000 + time->nanoseconds / 1000000;
-    time->microseconds = time->seconds * 1000000 + time->nanoseconds / 1000;
+  time->milliseconds = time->seconds * 1000 + time->nanoseconds / 1000000;
+  time->microseconds = time->seconds * 1000000 + time->nanoseconds / 1000;
 }
-//############################################
+// ############################################
 
-
-//############ Space Measurement ############
-void Space_Measure(DscSpaceMeasure *space)
-{
-   space->sizeInBytes=element_length_in_bytes(space->var);
-   space->sizeInBit=space->sizeInBytes*8;
-   space->sizeInKBytes=space->sizeInBytes/1024.0;
-   space->sizeInMBytes=space->sizeInBytes/(1024.0*1024.0);
+// ############ Space Measurement ############
+void Space_Measure(DscSpaceMeasure *space) {
+  space->sizeInBytes = element_length_in_bytes(space->var);
+  space->sizeInBit = space->sizeInBytes * 8;
+  space->sizeInKBytes = space->sizeInBytes / 1024.0;
+  space->sizeInMBytes = space->sizeInBytes / (1024.0 * 1024.0);
 }
-//############################################
+// ############################################
 
+// ############ HMAC=(KeyGen,Eval) ############
+void HMAC_Config(DscHMAC *hmac, int secparam) {
+  hmac->secparam = secparam;
+  hmac->plaintextInput = "I am a computer science student";
+  hmac->DigestOutput = malloc(32);
+  hmac->key = malloc(hmac->secparam);
+}
+void HMAC_KeyGen(DscHMAC *hmac) {
+  if (rng_get_bytes((unsigned char *)hmac->key, hmac->secparam, NULL) !=
+      hmac->secparam) {
+    printf("Error generating random key\n");
+  }
+}
+void HMAC_Eval(DscHMAC *hmac) {
+  int err;
 
-//############ HMAC=(KeyGen,Eval) ############
-void HMAC_Config(DscHMAC *hmac, int secparam)
-{
-    hmac->secparam=secparam;
-    hmac->plaintextInput = "I am a computer science student";
-    hmac->DigestOutput=malloc(32);
-    hmac->key=malloc(hmac->secparam);
-}
-void HMAC_KeyGen(DscHMAC *hmac)
-{
-if (rng_get_bytes((unsigned char*)hmac->key, hmac->secparam, NULL) != hmac->secparam)
- {
-        printf("Error generating random key\n");
- }
-}
-void HMAC_Eval(DscHMAC *hmac)
- {
-    int err;
-    
-    register_hash(&sha256_desc);
-    hmac->output_len = 32;
-    err = hmac_memory(find_hash("sha256"), (unsigned char*)hmac->key,hmac->secparam,
-                      (unsigned char*)hmac->plaintextInput,strlen((const char *)hmac->plaintextInput),
-                      hmac->DigestOutput, &(hmac->output_len));
-    
+  register_hash(&sha256_desc);
+  hmac->output_len = 32;
+  err = hmac_memory(find_hash("sha256"), (unsigned char *)hmac->key,
+                    hmac->secparam, (unsigned char *)hmac->plaintextInput,
+                    strlen((const char *)hmac->plaintextInput),
+                    hmac->DigestOutput, &(hmac->output_len));
 
-    if (err != CRYPT_OK) {
-        printf("Error performing HMAC: %s\n", error_to_string(err));
-    }
- 
+  if (err != CRYPT_OK) {
+    printf("Error performing HMAC: %s\n", error_to_string(err));
+  }
 }
-void HMAC_Free(DscHMAC *hmac){
-    free(hmac->DigestOutput);
-    free(hmac->key);
+void HMAC_Free(DscHMAC *hmac) {
+  free(hmac->DigestOutput);
+  free(hmac->key);
 }
-//############################################
+// ############################################
 
-
-//############ PRF=(KeyGen,Eval) #############
-void PRF_Config(DscPRF *prf,int secparam)
-{
-    prf->secparam=secparam;
-    prf->plaintextInput=malloc(prf->secparam);
-    strcpy((char *)prf->plaintextInput, "I am a student");
-    prf->randomOutput=malloc(32);
-    prf->key=malloc(prf->secparam);
-    
+// ############ PRF=(KeyGen,Eval) #############
+void PRF_Config(DscPRF *prf, int secparam) {
+  prf->secparam = secparam;
+  prf->plaintextInput = malloc(prf->secparam);
+  strcpy((char *)prf->plaintextInput, "I am a student");
+  prf->randomOutput = malloc(32);
+  prf->key = malloc(prf->secparam);
 }
-void PRF_KeyGen(DscPRF *prf)
-{
-if (rng_get_bytes((unsigned char*)prf->key, prf->secparam, NULL) != prf->secparam)
- {
-        printf("Error generating random key\n");
- }
+void PRF_KeyGen(DscPRF *prf) {
+  if (rng_get_bytes((unsigned char *)prf->key, prf->secparam, NULL) !=
+      prf->secparam) {
+    printf("Error generating random key\n");
+  }
 }
-void PRF_Eval(DscPRF *prf)
-{
-    int err;
-    //unsigned long *tmp;
+void PRF_Eval(DscPRF *prf) {
+  int err;
+  // unsigned long *tmp;
 
-    unsigned long output_len=32;
-    register_hash(&sha256_desc);
-    err = hmac_memory(find_hash("sha256"), (unsigned char*)prf->key,prf->secparam,
-                      (unsigned char*)prf->plaintextInput, strlen((const char *)prf->plaintextInput),
-                      prf->randomOutput, &(output_len));
+  unsigned long output_len = 32;
+  register_hash(&sha256_desc);
+  err = hmac_memory(find_hash("sha256"), (unsigned char *)prf->key,
+                    prf->secparam, (unsigned char *)prf->plaintextInput,
+                    strlen((const char *)prf->plaintextInput),
+                    prf->randomOutput, &(output_len));
 
-    if (err != CRYPT_OK) {
-        printf("Error performing PRF: %s\n", error_to_string(err));
-    }
+  if (err != CRYPT_OK) {
+    printf("Error performing PRF: %s\n", error_to_string(err));
+  }
 }
-void PRF_Free(DscPRF *prf){
-    free(prf->plaintextInput);
-    free(prf->key);
-    free(prf->randomOutput);
+void PRF_Free(DscPRF *prf) {
+  free(prf->plaintextInput);
+  free(prf->key);
+  free(prf->randomOutput);
 }
 
-
-//############ PRG=(SeedGen,Eval) ############
-void PRG_Config(DscPRG *prg, int secparam, u_int32_t size)
-{
-    prg->secparam=secparam;
-    prg->size=size;
+// ############ PRG=(SeedGen,Eval) ############
+void PRG_Config(DscPRG *prg, int secparam, u_int32_t size) {
+  prg->secparam = secparam;
+  prg->size = size;
 }
-void PRG_SeedGen(DscPRG *prg)
-{
-    (&(prg->hmac))->secparam=prg->secparam;
-    (&(prg->hmac))->plaintextInput = malloc(strlen("An inital value          ")+1);
-    strcpy((&(prg->hmac))->plaintextInput, "An inital value          ");
-    (&(prg->hmac))->DigestOutput=malloc(32);
-    (&(prg->hmac))->key=malloc((&(prg->hmac))->secparam);
-    //(&(prg->hmac))->output_len = 16;
-    prg->randomOutput=malloc(prg->size);  
-    HMAC_KeyGen((&(prg->hmac)));
+void PRG_SeedGen(DscPRG *prg) {
+  (&(prg->hmac))->secparam = prg->secparam;
+  (&(prg->hmac))->plaintextInput =
+      malloc(strlen("An inital value          ") + 1);
+  strcpy((&(prg->hmac))->plaintextInput, "An inital value          ");
+  (&(prg->hmac))->DigestOutput = malloc(32);
+  (&(prg->hmac))->key = malloc((&(prg->hmac))->secparam);
+  //(&(prg->hmac))->output_len = 16;
+  prg->randomOutput = malloc(prg->size);
+  HMAC_KeyGen((&(prg->hmac)));
 }
 void PRG_Eval(DscPRG *prg) {
-    
-    unsigned long generated = 0;       // Counter for generated bytes
-    unsigned long remaining = prg->size; // Remaining bytes to generate
-    //unsigned long hmac_len = sizeof(prg->seed);        // Length of HMAC output (SHA-256 produces 32 bytes)
-    unsigned long counter=0;              // Counter for HMAC input
-    size_t input_len = strlen((char *)prg->hmac.plaintextInput);
-    size_t counter_size = sizeof(counter);
 
-    char counter_str[5] = {0};
-    unsigned long temp_output_len = (&(prg->hmac))->secparam;
-    unsigned long bytes_to_copy = 0;
-    while (remaining > 0) {
-        sprintf(counter_str, "%lu", counter);
-        memcpy(prg->hmac.plaintextInput + 16, &counter_str, 5);  
-        HMAC_Eval(&(prg->hmac));
-        bytes_to_copy = (remaining < temp_output_len) ? remaining : temp_output_len;
-        memcpy(prg->randomOutput + generated, prg->hmac.DigestOutput, bytes_to_copy);
+  unsigned long generated = 0;         // Counter for generated bytes
+  unsigned long remaining = prg->size; // Remaining bytes to generate
+  // unsigned long hmac_len = sizeof(prg->seed);        // Length of HMAC output
+  // (SHA-256 produces 32 bytes)
+  unsigned long counter = 0; // Counter for HMAC input
+  size_t input_len = strlen((char *)prg->hmac.plaintextInput);
+  size_t counter_size = sizeof(counter);
 
-        // Update counters
-        generated += bytes_to_copy;
-        remaining -= bytes_to_copy;
-        counter++;
-    }
+  char counter_str[5] = {0};
+  unsigned long temp_output_len = (&(prg->hmac))->secparam;
+  unsigned long bytes_to_copy = 0;
+  while (remaining > 0) {
+    sprintf(counter_str, "%lu", counter);
+    memcpy(prg->hmac.plaintextInput + 16, &counter_str, 5);
+    HMAC_Eval(&(prg->hmac));
+    bytes_to_copy = (remaining < temp_output_len) ? remaining : temp_output_len;
+    memcpy(prg->randomOutput + generated, prg->hmac.DigestOutput,
+           bytes_to_copy);
+
+    // Update counters
+    generated += bytes_to_copy;
+    remaining -= bytes_to_copy;
+    counter++;
+  }
 }
-void PRG_Free(DscPRG *prg){
-    free(prg->randomOutput);
-    HMAC_Free(&(prg->hmac));
-    free(prg->hmac.plaintextInput);
+void PRG_Free(DscPRG *prg) {
+  free(prg->randomOutput);
+  HMAC_Free(&(prg->hmac));
+  free(prg->hmac.plaintextInput);
 }
 
-//############ Hash=(Eval) ############
-void Hash_Config(DscHash *hash,int secparam)
-{
-    /*SHA1:   register_hash (&sha1_desc);
-    SHA224: register_hash (&sha224_desc);
-    SHA256: register_hash (&sha256_desc);
-    SHA384: register_hash (&sha384_desc);
-    SHA512: register_hash (&sha512_desc);
-    MD2:    register_hash (&md2_desc);
-    MD4:    register_hash (&md4_desc);
-    MD5:    register_hash (&md5_desc);*/
-    char *str="Example input data";
-    assert(hash != NULL);
-    //if (!hash) { perror("malloc failed"); exit(1); }
-    hash->plaintextInput = malloc(strlen(str) + 1); // allocate string copy
-    //if (!hash->plaintextInput) { perror("malloc failed"); exit(1); }
-    strcpy((char *)hash->plaintextInput,str);
+// ############ Hash=(Eval) ############
+void Hash_Config(DscHash *hash, int secparam) {
+  /*SHA1:   register_hash (&sha1_desc);
+  SHA224: register_hash (&sha224_desc);
+  SHA256: register_hash (&sha256_desc);
+  SHA384: register_hash (&sha384_desc);
+  SHA512: register_hash (&sha512_desc);
+  MD2:    register_hash (&md2_desc);
+  MD4:    register_hash (&md4_desc);
+  MD5:    register_hash (&md5_desc);*/
+  char *str = "Example input data";
+  assert(hash != NULL);
+  // if (!hash) { perror("malloc failed"); exit(1); }
+  hash->plaintextInput = malloc(strlen(str) + 1); // allocate string copy
+  // if (!hash->plaintextInput) { perror("malloc failed"); exit(1); }
+  strcpy((char *)hash->plaintextInput, str);
 
-    hash->secparam=secparam;
-    hash->DigestOutput=malloc(hash->secparam);// Adjust buffer size for safety
-    register_hash (&sha256_desc);
-    hash->hash_name="sha256";
+  hash->secparam = secparam;
+  hash->DigestOutput = malloc(32); // Adjust buffer size for safety
+  register_hash(&sha256_desc);
+  hash->hash_name = "sha256";
 }
 void Hash_Eval(DscHash *hash) {
-    int err, hash_idx;
-    
-    // Find the hash function by name
+  int err, hash_idx;
 
-    hash_idx = find_hash(hash->hash_name);
-    if (hash_idx == -1) {
-        printf("Invalid hash function name: %s\n", hash->hash_name);
-        exit(EXIT_FAILURE);
-    }
+  // Find the hash function by name
 
-    // Set the output length for the found hash function
-    hash->output_len = hash_descriptor[hash_idx].hashsize;
+  hash_idx = find_hash(hash->hash_name);
+  if (hash_idx == -1) {
+    printf("Invalid hash function name: %s\n", hash->hash_name);
+    exit(EXIT_FAILURE);
+  }
 
-    // Compute the hash
-    err = hash_memory(hash_idx, (unsigned char*)hash->plaintextInput, 
-    strlen((const char *)hash->plaintextInput) - 1, hash->DigestOutput,
-     &(hash->output_len));    
-     if (err != CRYPT_OK) {
-        printf("Error performing hash: %s\n", error_to_string(err));
-        exit(EXIT_FAILURE);
-    }
+  // Set the output length for the found hash function
+  hash->output_len = hash_descriptor[hash_idx].hashsize;
+
+  // Compute the hash
+  err = hash_memory(hash_idx, (unsigned char *)hash->plaintextInput,
+                    strlen((const char *)hash->plaintextInput) - 1,
+                    hash->DigestOutput, &(hash->output_len));
+  if (err != CRYPT_OK) {
+    printf("Error performing hash: %s\n", error_to_string(err));
+    exit(EXIT_FAILURE);
+  }
 }
-//###############################
-//initilizes prime, generator and order and sets secparam=512 bits
-void GroupGen_Config(DscGrp *grp)
-{
-    grp->secparam=512;
-    mpz_init(grp->prime);
-    mpz_init(grp->generator);
-    mpz_init(grp->order);
+// ###############################
+// initilizes prime, generator and order and sets secparam=512 bits
+void GroupGen_Config(DscGrp *grp) {
+  grp->secparam = 512;
+  mpz_init(grp->prime);
+  mpz_init(grp->generator);
+  mpz_init(grp->order);
 }
-//generates Z_p* with generator = 2, and p is a safe prime (p=2q+1 where q is a prime)
-void GroupGen(DscGrp *grp)
-{
-    // Generate a random safe prime number (p = 2q + 1)
-    mpz_t q, test;
-    gmp_randinit_default(grp->state);
-    gmp_randseed_ui(grp->state, time(NULL));
-    mpz_inits(q, test, NULL);
+// generates Z_p* with generator = 2, and p is a safe prime (p=2q+1 where q is a
+// prime)
+void GroupGen(DscGrp *grp) {
+  // Generate a random safe prime number (p = 2q + 1)
+  mpz_t q, test;
+  gmp_randinit_default(grp->state);
+  gmp_randseed_ui(grp->state, time(NULL));
+  mpz_inits(q, test, NULL);
 
-    while (1) {
-        // Generate random 511-bit prime q
-        mpz_urandomb(q,  grp->state, grp->secparam-1);
-        mpz_setbit(q, grp->secparam-2); // ensure it's secparam-1 bits
+  while (1) {
+    // Generate random 511-bit prime q
+    mpz_urandomb(q, grp->state, grp->secparam - 1);
+    mpz_setbit(q, grp->secparam - 2); // ensure it's secparam-1 bits
 
-        mpz_nextprime(q, q);
-        //q might be a secparam bit prime,if so, so p will be secparam+1 bit prime, might cause 
-        //buffer overlfow somewhere in the code
+    mpz_nextprime(q, q);
+    // q might be a secparam bit prime,if so, so p will be secparam+1 bit prime,
+    // might cause buffer overlfow somewhere in the code
 
-        mpz_mul_ui(grp->prime, q, 2);
-        mpz_add_ui(grp->prime, grp->prime, 1);
+    mpz_mul_ui(grp->prime, q, 2);
+    mpz_add_ui(grp->prime, grp->prime, 1);
 
-        if (mpz_probab_prime_p(grp->prime, 25) > 0) {
-            mpz_set_ui(test, 2);
-            mpz_powm(test, test, q, grp->prime);
+    if (mpz_probab_prime_p(grp->prime, 25) > 0) {
+      mpz_set_ui(test, 2);
+      mpz_powm(test, test, q, grp->prime);
 
-            if (mpz_cmp_ui(test, 1) != 0) {
-                mpz_set_ui(grp->generator,2);
-                break;
-            }
-        }
-
+      if (mpz_cmp_ui(test, 1) != 0) {
+        mpz_set_ui(grp->generator, 2);
+        mpz_sub_ui(grp->order, grp->prime, 1);
+        break;
+      }
     }
+  }
 
-    mpz_clears(q, test, NULL);
+  mpz_clears(q, test, NULL);
 }
-
-//############ BGroupGen  ############
-void BGroupGen_Config(DscBGrp *bgrp)
-{
-    bgrp->paramSize=2048;
-    bgrp->paramAddress="d224.param";
+void GroupGen_Free(DscGrp* grp){
+  mpz_clears(grp->prime,grp->generator,grp->order,NULL);
+  gmp_randclear(grp->state);
 }
-void BGroupGen(DscBGrp *bgrp)
-{
-    char param[bgrp->paramSize]; // Adjust size if needed
-    FILE *param_file;
+// ############ BGroupGen  ############
+void BGroupGen_Config(DscBGrp *bgrp) {
+  bgrp->paramSize = 2048;
+  bgrp->paramAddress = "d224.param";
+}
+void BGroupGen(DscBGrp *bgrp) {
+  char param[bgrp->paramSize]; // Adjust size if needed
+  FILE *param_file;
 
-    // Load parameters from d224.param file
-    param_file = fopen(bgrp->paramAddress, "r");
-    if (!param_file) {
-        pbc_die("Error opening param file.");
-    }
-    size_t count = fread(param, 1, sizeof(param), param_file);
-    if (count == 0) 
-    {
-        pbc_die("Error reading param file.");
-        fclose(param_file);
-    }
-    pairing_init_set_buf(bgrp->pairing, param, count);
+  // Load parameters from d224.param file
+  param_file = fopen(bgrp->paramAddress, "r");
+  if (!param_file) {
+    pbc_die("Error opening param file.");
+  }
+  size_t count = fread(param, 1, sizeof(param), param_file);
+  if (count == 0) {
+    pbc_die("Error reading param file.");
     fclose(param_file);
-    mpz_init(bgrp->order);
-    mpz_set(bgrp->order, (bgrp->pairing)->r);
-    
-    element_init_G1(bgrp->g1, bgrp->pairing);
-    element_init_G2(bgrp->g2, bgrp->pairing);
-    element_init_GT(bgrp->gt, bgrp->pairing);
-    element_random(bgrp->g1);
-    element_random(bgrp->g2);
-    element_random(bgrp->gt);
+  }
+  pairing_init_set_buf(bgrp->pairing, param, count);
+  fclose(param_file);
+  mpz_init(bgrp->order);
+  mpz_set(bgrp->order, (bgrp->pairing)->r);
 
-    element_init_G1(bgrp->rg1, bgrp->pairing);
-    element_init_G2(bgrp->rg2, bgrp->pairing);
-    element_init_GT(bgrp->rgt, bgrp->pairing);
-    element_init_Zr(bgrp->rz,bgrp->pairing);
-    element_random(bgrp->rg1);
-    element_random(bgrp->rg2);
-    element_random(bgrp->rgt);
-    element_random(bgrp->rz);
+  element_init_G1(bgrp->g1, bgrp->pairing);
+  element_init_G2(bgrp->g2, bgrp->pairing);
+  element_init_GT(bgrp->gt, bgrp->pairing);
+  element_random(bgrp->g1);
+  element_random(bgrp->g2);
+  element_random(bgrp->gt);
+
+  element_init_G1(bgrp->rg1, bgrp->pairing);
+  element_init_G2(bgrp->rg2, bgrp->pairing);
+  element_init_GT(bgrp->rgt, bgrp->pairing);
+  element_init_Zr(bgrp->rz, bgrp->pairing);
+  element_random(bgrp->rg1);
+  element_random(bgrp->rg2);
+  element_random(bgrp->rgt);
+  element_random(bgrp->rz);
 }
 
-//############ SKE=(KeyGen,Enc,Dec) (AES+CBC (Blocksize=16B)) ############
-void SKE_Config(DscAES *aes,int secparam) {
-    aes->secparam=secparam;
-    char *str="I am a computer science student";
-    aes->plaintextInput=malloc(strlen(str) * sizeof(char));
-    strcpy(aes->plaintextInput,str); 
-    aes->plaintextOutput=malloc(strlen(str) * sizeof(char));
-    aes->ciphertextOutput=malloc(2*strlen(str) * sizeof(char));
-    aes->key=malloc(((aes->secparam)+1)* sizeof(char));
-    aes->iv=malloc((aes->secparam)* sizeof(char));
-    PADDING_Config(&(aes->padd));
-    }
-void SKE_KeyGen(DscAES *aes)
-{
-if (rng_get_bytes((unsigned char *)aes->key, aes->secparam, NULL) != aes->secparam)
- {
-        printf("Error generating random key\n");
- }
-
- }
- void SKE_ENC(DscAES *aes)
- {
-    int err;
-    symmetric_CBC cbc;
-
-    strcpy(aes->padd.mainMessage,aes->plaintextInput);
-    PADDING_Message(&(aes->padd));
-    char *temp=realloc(aes->ciphertextOutput, (strlen(aes->padd.paddedMessage))*sizeof(char));
-    if (temp !=NULL){
-        aes->ciphertextOutput=temp;
-    }
-
-    if (register_cipher(&aes_desc) == -1){
-        printf("Error registering cipher.\n");
-    }
-
-    // Initialize CBC mode
-if ((err = cbc_start(find_cipher("aes"), (const unsigned char *)aes->iv, (const unsigned char *)aes->key, aes->secparam, 0, &cbc)) != CRYPT_OK) {        printf("cbc_start error: %s\n", error_to_string(err));
-    }
-
-    // Encrypt the plaintext
-    //printf("\nLength padded is: %ld\n",strlen(aes->padd.paddedMessage));
-        //aes->ciphertextOutput=malloc(2*strlen(aes->padd.paddedMessage) * sizeof(char));
-if ((err = cbc_encrypt((const unsigned char *)aes->padd.paddedMessage, (unsigned char *)aes->ciphertextOutput, strlen(aes->padd.paddedMessage), &cbc)) != CRYPT_OK) {        printf("cbc_encrypt error: %s\n", error_to_string(err));
-    }
-    
-    // Done with CBC mode for encryption
-    if ((err = cbc_done(&cbc)) != CRYPT_OK) {
-        printf("cbc_done error: %s\n", error_to_string(err));
-    }
-
- }
- void SKE_DEC(DscAES *aes)
- {
-    int err;
-    symmetric_CBC cbc;
-    /* *temp4=realloc(aes->ciphertextOutput, (strlen(aes->padd.paddedMessage))*sizeof(char));
-
-    if (temp4 !=NULL){
-        aes->ciphertextOutput=temp4;
-    }*/
-
-     // Initialize CBC mode for decryption
-if ((err = cbc_start(find_cipher("aes"), (const unsigned char *)aes->iv, (const unsigned char *)aes->key, aes->secparam, 0, &cbc)) != CRYPT_OK) {        printf("cbc_start error: %s\n", error_to_string(err));
-    }
-
-    // Decrypt the ciphertext
-    //aes->padd.paddedMessage=malloc(strlen((aes->padd.paddedMessage)) * sizeof(char));
-if ((err = cbc_decrypt((const unsigned char *)aes->ciphertextOutput, (unsigned char *)aes->padd.paddedMessage, strlen(aes->padd.paddedMessage), &cbc)) != CRYPT_OK) {        printf("cbc_decrypt error: %s\n", error_to_string(err));
-    }
-
-    // Done with CBC mode for decryption
-    if ((err = cbc_done(&cbc)) != CRYPT_OK) {
-        printf("cbc_done error: %s\n", error_to_string(err));
-    }
-
-
-    UNPADDING_Message(&(aes->padd));
-    char *temp=realloc(aes->plaintextOutput, strlen(aes->padd.unpaddedMessage));
-    if (temp !=NULL){
-        aes->plaintextOutput=temp;
-    }
-    strcpy(aes->plaintextOutput,aes->padd.unpaddedMessage);
- }
-//###############################
-
-
-//###### PKE=(KeyGen,Enc,Dec) (Elgamel)
-void PKE_Config(DscElg *elg)
-{
-    GroupGen_Config(&(elg->grp));
-    elg->grp.secparam=256;
-    char *str="This is example";
-    elg->plaintextInput=malloc(strlen(str));
-    strcpy(elg->plaintextInput,str);
-    elg->plaintextOutput=malloc(2*strlen(str));
-
-    mpz_inits(elg->c1,elg->c2,elg->input,elg->pkey,elg->skey,NULL);
+// ############ SKE=(KeyGen,Enc,Dec) (AES+CBC (Blocksize=16B)) ############
+void SKE_Config(DscAES *aes, int secparam) {
+  aes->secparam = secparam;
+  char *str = "I am a computer science student";
+  aes->plaintextInput = malloc(strlen(str) * sizeof(char));
+  strcpy(aes->plaintextInput, str);
+  aes->plaintextOutput = malloc(strlen(str) * sizeof(char));
+  aes->ciphertextOutput = malloc(2 * strlen(str) * sizeof(char));
+  aes->key = malloc(((aes->secparam) + 1) * sizeof(char));
+  aes->iv = malloc((aes->secparam) * sizeof(char));
+  PADDING_Config(&(aes->padd));
 }
-void PKE_KeyGen(DscElg *elg)
-{
-    GroupGen(&(elg->grp));
-    mpz_urandomm(elg->skey,elg->grp.state, elg->grp.generator);
-    mpz_powm(elg->pkey, elg->grp.generator, elg->skey, elg->grp.prime);
+void SKE_KeyGen(DscAES *aes) {
+  if (rng_get_bytes((unsigned char *)aes->key, aes->secparam, NULL) !=
+      aes->secparam) {
+    printf("Error generating random key\n");
+  }
 }
-void PKE_ENC(DscElg *elg)
-{
-    mpz_import(elg->input, strlen(elg->plaintextInput), 1, sizeof(char), 0, 0, elg->plaintextInput);
+void SKE_ENC(DscAES *aes) {
+  int err;
+  symmetric_CBC cbc;
 
-    mpz_t r;
-    mpz_init(r); 
-    mpz_urandomm(r,elg->grp.state, elg->grp.generator);
+  strcpy(aes->padd.mainMessage, aes->plaintextInput);
+  PADDING_Message(&(aes->padd));
+  char *temp = realloc(aes->ciphertextOutput,
+                       (strlen(aes->padd.paddedMessage)) * sizeof(char));
+  if (temp != NULL) {
+    aes->ciphertextOutput = temp;
+  }
 
-    // c1 = g^r mod p
-    mpz_powm(elg->c1, elg->grp.generator,r, elg->grp.prime);
+  if (register_cipher(&aes_desc) == -1) {
+    printf("Error registering cipher.\n");
+  }
 
-    // c2 = m * y^r mod p
-    mpz_powm(elg->c2, elg->pkey, r, elg->grp.prime);
-    mpz_mul(elg->c2, elg->c2, elg->input);
-    mpz_mod(elg->c2, elg->c2, elg->grp.prime);
+  // Initialize CBC mode
+  if ((err = cbc_start(find_cipher("aes"), (const unsigned char *)aes->iv,
+                       (const unsigned char *)aes->key, aes->secparam, 0,
+                       &cbc)) != CRYPT_OK) {
+    printf("cbc_start error: %s\n", error_to_string(err));
+  }
+
+  // Encrypt the plaintext
+  // printf("\nLength padded is: %ld\n",strlen(aes->padd.paddedMessage));
+  // aes->ciphertextOutput=malloc(2*strlen(aes->padd.paddedMessage) *
+  // sizeof(char));
+  if ((err = cbc_encrypt((const unsigned char *)aes->padd.paddedMessage,
+                         (unsigned char *)aes->ciphertextOutput,
+                         strlen(aes->padd.paddedMessage), &cbc)) != CRYPT_OK) {
+    printf("cbc_encrypt error: %s\n", error_to_string(err));
+  }
+
+  // Done with CBC mode for encryption
+  if ((err = cbc_done(&cbc)) != CRYPT_OK) {
+    printf("cbc_done error: %s\n", error_to_string(err));
+  }
 }
-void PKE_DEC(DscElg *elg)
-{
-    mpz_t s, m;
-    mpz_init(s);
-    mpz_init(m);
-    
-    mpz_powm(s, elg->c1, elg->skey, elg->grp.prime);
+void SKE_DEC(DscAES *aes) {
+  int err;
+  symmetric_CBC cbc;
+  /* *temp4=realloc(aes->ciphertextOutput,
+  (strlen(aes->padd.paddedMessage))*sizeof(char));
 
-    mpz_invert(s, s, elg->grp.prime);
-    mpz_mul(m, elg->c2, s);
-    mpz_mod(m, m, elg->grp.prime);
-    
-    size_t count;
-    mpz_export(elg->plaintextOutput, &count, 1, sizeof(char), 0, 0, m);
-    elg->plaintextOutput[count] = '\0';
+  if (temp4 !=NULL){
+      aes->ciphertextOutput=temp4;
+  }*/
+
+  // Initialize CBC mode for decryption
+  if ((err = cbc_start(find_cipher("aes"), (const unsigned char *)aes->iv,
+                       (const unsigned char *)aes->key, aes->secparam, 0,
+                       &cbc)) != CRYPT_OK) {
+    printf("cbc_start error: %s\n", error_to_string(err));
+  }
+
+  // Decrypt the ciphertext
+  // aes->padd.paddedMessage=malloc(strlen((aes->padd.paddedMessage)) *
+  // sizeof(char));
+  if ((err = cbc_decrypt((const unsigned char *)aes->ciphertextOutput,
+                         (unsigned char *)aes->padd.paddedMessage,
+                         strlen(aes->padd.paddedMessage), &cbc)) != CRYPT_OK) {
+    printf("cbc_decrypt error: %s\n", error_to_string(err));
+  }
+
+  // Done with CBC mode for decryption
+  if ((err = cbc_done(&cbc)) != CRYPT_OK) {
+    printf("cbc_done error: %s\n", error_to_string(err));
+  }
+
+  UNPADDING_Message(&(aes->padd));
+  char *temp = realloc(aes->plaintextOutput, strlen(aes->padd.unpaddedMessage));
+  if (temp != NULL) {
+    aes->plaintextOutput = temp;
+  }
+  strcpy(aes->plaintextOutput, aes->padd.unpaddedMessage);
 }
-//###############################
+// ###############################
 
+// ###### PKE=(KeyGen,Enc,Dec) (Elgamel)
+void PKE_Config(DscElg *elg) {
+  GroupGen_Config(&(elg->grp));
+  elg->grp.secparam = 256;
+  char *str = "This is example";
+  elg->plaintextInput = malloc(strlen(str));
+  strcpy(elg->plaintextInput, str);
+  elg->plaintextOutput = malloc(2 * strlen(str));
 
-//################ Ds=(Gen,Sign,vrfy) (Schnorr signature scheme) 
-void DS_Config(DscDS *ds)
-{
-    char *str="Iammojtaba";
-    ds->plaintextInput=malloc(strlen(str)*sizeof(char));
-    strcpy(ds->plaintextInput,str);
-    ds->isValid=false;
-    Hash_Config(&(ds->hash),32);
-    GroupGen_Config(&(ds->grp));
-    ds->grp.secparam=512;
-    mpz_inits(ds->skey,ds->pkey,ds->tag1,ds->tag2,NULL);
+  mpz_inits(elg->c1, elg->c2, elg->input, elg->pkey, elg->skey, NULL);
 }
-void DS_KeyGen(DscDS *ds)
-{
-    GroupGen(&(ds->grp));
-    mpz_urandomm(ds->skey,ds->grp.state, ds->grp.generator);
-    mpz_powm(ds->pkey, ds->grp.generator, ds->skey, ds->grp.prime);
+void PKE_KeyGen(DscElg *elg) {
+  GroupGen(&(elg->grp));
+  mpz_urandomm(elg->skey, elg->grp.state, elg->grp.generator);
+  mpz_powm(elg->pkey, elg->grp.generator, elg->skey, elg->grp.prime);
 }
-void DS_Sign(DscDS *ds)
-{
-    char *str=malloc(64*sizeof(char)); //needs changing (if prime greater than 64 bytes)
-    mpz_t k;
-    mpz_init(k); 
-    mpz_urandomm(k,ds->grp.state, ds->grp.generator);
+void PKE_ENC(DscElg *elg) {
+  mpz_import(elg->input, strlen(elg->plaintextInput), 1, sizeof(char), 0, 0,
+             elg->plaintextInput);
 
+  mpz_t r;
+  mpz_init(r);
+  mpz_urandomm(r, elg->grp.state, elg->grp.generator);
 
-    mpz_t I;
-    mpz_init(I); 
-    mpz_powm(I, ds->grp.generator, k, ds->grp.prime);
+  // c1 = g^r mod p
+  mpz_powm(elg->c1, elg->grp.generator, r, elg->grp.prime);
 
-    size_t count;
-    //mpz_export(str, &count, 1, sizeof(char), 0, 0, I);
-    gmp_sprintf(str,"%02x",I);
-
-
-    char tmp[64];
-    strcpy(tmp, str);
-    sprintf(str, "%s%s", tmp, ds->plaintextInput);
-    //sprintf(str,"%s%s",str,ds->plaintextInput);
- 
-
-
-    char *temp2=realloc(ds->hash.plaintextInput, strlen(str));
-    if (temp2 !=NULL){
-        ds->hash.plaintextInput = temp2;
-    }
-
-    strcpy((char *)ds->hash.plaintextInput,str);
-    free(str);
-    Hash_Eval(&(ds->hash));
-
-
-    mpz_import(ds->tag1, strlen((const char *)(&(ds->hash))->DigestOutput), 1, sizeof(char), 0, 0, (&(ds->hash))->DigestOutput);
-
-    mpz_mul(ds->tag2, ds->tag1, ds->skey);
-    mpz_add(ds->tag2,ds->tag2,k);
-    
-    mpz_t q;
-    mpz_init(q); 
-    mpz_sub_ui(q,ds->grp.prime,1);
-    mpz_mod(ds->tag2, ds->tag2, q);
-
-    mpz_clears(q,I,k,NULL);
+  // c2 = m * y^r mod p
+  mpz_powm(elg->c2, elg->pkey, r, elg->grp.prime);
+  mpz_mul(elg->c2, elg->c2, elg->input);
+  mpz_mod(elg->c2, elg->c2, elg->grp.prime);
 }
-void DS_Vrfy(DscDS *ds)
-{
-    char *str=malloc(64 * sizeof(char)); //needs changing if prime > 64
+void PKE_DEC(DscElg *elg) {
+  mpz_t s, m;
+  mpz_init(s);
+  mpz_init(m);
 
-    mpz_t temp1,temp2,temp3,temp4;
-    mpz_inits(temp1,temp2,temp3,temp4,NULL);
+  mpz_powm(s, elg->c1, elg->skey, elg->grp.prime);
 
-    mpz_powm(temp1, ds->grp.generator, ds->tag2, ds->grp.prime);
-    
-    mpz_neg(temp4,ds->tag1);
-    mpz_powm(temp2, ds->pkey, temp4, ds->grp.prime);
+  mpz_invert(s, s, elg->grp.prime);
+  mpz_mul(m, elg->c2, s);
+  mpz_mod(m, m, elg->grp.prime);
 
-    mpz_mul(temp3, temp1, temp2);
-    mpz_mod(temp3, temp3, ds->grp.prime);
-    
-
-    //size_t count;
-    //mpz_export(str, &count, 1, sizeof(char), 0, 0, temp3);
-    gmp_sprintf(str,"%02x",temp3);
-
-
-    char t[64];
-    strcpy(t,str);
-    sprintf(str,"%s%s",t,ds->plaintextInput);
-    //strcat(str,ds->plaintextInput);
-    
-
-  char *temp=realloc(ds->hash.plaintextInput, strlen(str));
-    if (temp !=NULL){
-        ds->hash.plaintextInput=temp;
-    }
-        strcpy((char *)ds->hash.plaintextInput, str);
-    Hash_Eval(&(ds->hash));
-    
-   
-    //mpz_import(temp4, strlen((&(ds->hash))->DigestOutput), 1, sizeof(char), 0, 0, (&(ds->hash))->DigestOutput);
-    mpz_import(temp4, strlen((const char *)(&(ds->hash))->DigestOutput), 1, sizeof(char), 0, 0, (const void *)(&(ds->hash))->DigestOutput);
-
-
-    if (mpz_cmp(temp4,ds->tag1)==0)
-    {
-        ds->isValid=true;
-    }
-    else
-    {
-        ds->isValid=false;
-    }
-    mpz_clears(temp1,temp2,temp3,temp4,NULL);
+  size_t count;
+  mpz_export(elg->plaintextOutput, &count, 1, sizeof(char), 0, 0, m);
+  elg->plaintextOutput[count] = '\0';
 }
-//###############################
+// ###############################
 
-
-//################ Padding=(PADDING_Message,UNPADDING_Message) (PKCS7_PADDING)
-void PADDING_Config(DscPADD *padd)
-{
-    padd->blockSize=16;
-    char *str="This is a sample message for test";
-    padd->mainMessage=malloc(strlen(str) *sizeof(char));
-    strcpy(padd->mainMessage,str);
-    padd->paddedMessage=malloc((strlen(str)+16) *sizeof(char));
-    padd->unpaddedMessage=malloc(strlen(str) *sizeof(char));
+// ################ Ds=(Gen,Sign,vrfy) (Schnorr signature scheme)
+void DS_Config(DscDS *ds) {
+  char *str = "Iammojtaba";
+  ds->plaintextInput = malloc(strlen(str) * sizeof(char));
+  strcpy(ds->plaintextInput, str);
+  ds->isValid = false;
+  Hash_Config(&(ds->hash), 32);
+  GroupGen_Config(&(ds->grp));
+  ds->grp.secparam = 512;
+  mpz_inits(ds->skey, ds->pkey, ds->tag1, ds->tag2, NULL);
 }
-void PADDING_Message(DscPADD *padd){
-    unsigned long data_len, padded_len;
-    char *temp=malloc(strlen(padd->mainMessage)*sizeof(char));
-    strcpy(temp,padd->mainMessage);
-    data_len=strlen(temp);
+void DS_KeyGen(DscDS *ds) {
+  GroupGen(&(ds->grp));
+  mpz_urandomm(ds->skey, ds->grp.state, ds->grp.generator);
+  mpz_powm(ds->pkey, ds->grp.generator, ds->skey, ds->grp.prime);
+}
+void DS_Sign(DscDS *ds) {
+  char *str = malloc(
+      64 * sizeof(char)); // needs changing (if prime greater than 64 bytes)
+  mpz_t k;
+  mpz_init(k);
+  mpz_urandomm(k, ds->grp.state, ds->grp.generator);
 
-    unsigned long padding_len = padd->blockSize - (data_len % padd->blockSize);
-    padded_len = data_len + padding_len;
-    
-    
-    char *padded_data = realloc(padd->paddedMessage,(padded_len+1)*sizeof(char));
-    
-    if (padded_data !=NULL){
-        padd->paddedMessage=padded_data;
-        memcpy(padd->paddedMessage, temp, data_len);
-        memset(padd->paddedMessage + data_len, (char)padding_len, padding_len);
-        memset(padd->paddedMessage + padded_len, '\0', 1);
-    }
+  mpz_t I;
+  mpz_init(I);
+  mpz_powm(I, ds->grp.generator, k, ds->grp.prime);
+
+  size_t count;
+  // mpz_export(str, &count, 1, sizeof(char), 0, 0, I);
+  gmp_sprintf(str, "%02x", I);
+
+  char tmp[64];
+  strcpy(tmp, str);
+  sprintf(str, "%s%s", tmp, ds->plaintextInput);
+  // sprintf(str,"%s%s",str,ds->plaintextInput);
+
+  char *temp2 = realloc(ds->hash.plaintextInput, strlen(str));
+  if (temp2 != NULL) {
+    ds->hash.plaintextInput = temp2;
+  }
+
+  strcpy((char *)ds->hash.plaintextInput, str);
+  free(str);
+  Hash_Eval(&(ds->hash));
+
+  mpz_import(ds->tag1, strlen((const char *)(&(ds->hash))->DigestOutput), 1,
+             sizeof(char), 0, 0, (&(ds->hash))->DigestOutput);
+
+  mpz_mul(ds->tag2, ds->tag1, ds->skey);
+  mpz_add(ds->tag2, ds->tag2, k);
+
+  mpz_t q;
+  mpz_init(q);
+  mpz_sub_ui(q, ds->grp.prime, 1);
+  mpz_mod(ds->tag2, ds->tag2, q);
+
+  mpz_clears(q, I, k, NULL);
+}
+void DS_Vrfy(DscDS *ds) {
+  char *str = malloc(64 * sizeof(char)); // needs changing if prime > 64
+
+  mpz_t temp1, temp2, temp3, temp4;
+  mpz_inits(temp1, temp2, temp3, temp4, NULL);
+
+  mpz_powm(temp1, ds->grp.generator, ds->tag2, ds->grp.prime);
+
+  mpz_neg(temp4, ds->tag1);
+  mpz_powm(temp2, ds->pkey, temp4, ds->grp.prime);
+
+  mpz_mul(temp3, temp1, temp2);
+  mpz_mod(temp3, temp3, ds->grp.prime);
+
+  // size_t count;
+  // mpz_export(str, &count, 1, sizeof(char), 0, 0, temp3);
+  gmp_sprintf(str, "%02x", temp3);
+
+  char t[64];
+  strcpy(t, str);
+  sprintf(str, "%s%s", t, ds->plaintextInput);
+  // strcat(str,ds->plaintextInput);
+
+  char *temp = realloc(ds->hash.plaintextInput, strlen(str));
+  if (temp != NULL) {
+    ds->hash.plaintextInput = temp;
+  }
+  strcpy((char *)ds->hash.plaintextInput, str);
+  Hash_Eval(&(ds->hash));
+
+  // mpz_import(temp4, strlen((&(ds->hash))->DigestOutput), 1, sizeof(char), 0,
+  // 0, (&(ds->hash))->DigestOutput);
+  mpz_import(temp4, strlen((const char *)(&(ds->hash))->DigestOutput), 1,
+             sizeof(char), 0, 0, (const void *)(&(ds->hash))->DigestOutput);
+
+  if (mpz_cmp(temp4, ds->tag1) == 0) {
+    ds->isValid = true;
+  } else {
+    ds->isValid = false;
+  }
+  mpz_clears(temp1, temp2, temp3, temp4, NULL);
+}
+// ###############################
+
+// ################ Padding=(PADDING_Message,UNPADDING_Message) (PKCS7_PADDING)
+void PADDING_Config(DscPADD *padd) {
+  padd->blockSize = 16;
+  char *str = "This is a sample message for test";
+  padd->mainMessage = malloc(strlen(str) * sizeof(char));
+  strcpy(padd->mainMessage, str);
+  padd->paddedMessage = malloc((strlen(str) + 16) * sizeof(char));
+  padd->unpaddedMessage = malloc(strlen(str) * sizeof(char));
+}
+void PADDING_Message(DscPADD *padd) {
+  unsigned long data_len, padded_len;
+  char *temp = malloc(strlen(padd->mainMessage) * sizeof(char));
+  strcpy(temp, padd->mainMessage);
+  data_len = strlen(temp);
+
+  unsigned long padding_len = padd->blockSize - (data_len % padd->blockSize);
+  padded_len = data_len + padding_len;
+
+  char *padded_data =
+      realloc(padd->paddedMessage, (padded_len + 1) * sizeof(char));
+
+  if (padded_data != NULL) {
+    padd->paddedMessage = padded_data;
+    memcpy(padd->paddedMessage, temp, data_len);
+    memset(padd->paddedMessage + data_len, (char)padding_len, padding_len);
+    memset(padd->paddedMessage + padded_len, '\0', 1);
+  }
 }
 void UNPADDING_Message(DscPADD *padd) {
-    unsigned long data_len, padded_len;
-    char *temp=malloc(strlen(padd->paddedMessage)*sizeof(char));
-    strcpy(temp,padd->paddedMessage);
+  unsigned long data_len, padded_len;
+  char *temp = malloc(strlen(padd->paddedMessage) * sizeof(char));
+  strcpy(temp, padd->paddedMessage);
 
-    padded_len=(int)padd->paddedMessage[(strlen(padd->paddedMessage))-1];
-    data_len=strlen(padd->paddedMessage)-padded_len;
-    
-    char *unpadded_data = realloc(padd->unpaddedMessage,(data_len+1)*sizeof(char));
-    
-    if (unpadded_data !=NULL){
-        padd->unpaddedMessage=unpadded_data;
-        memcpy(padd->unpaddedMessage, temp, data_len);
-    }
-    padd->unpaddedMessage[data_len]='\0';
+  padded_len = (int)padd->paddedMessage[(strlen(padd->paddedMessage)) - 1];
+  data_len = strlen(padd->paddedMessage) - padded_len;
+
+  char *unpadded_data =
+      realloc(padd->unpaddedMessage, (data_len + 1) * sizeof(char));
+
+  if (unpadded_data != NULL) {
+    padd->unpaddedMessage = unpadded_data;
+    memcpy(padd->unpaddedMessage, temp, data_len);
+  }
+  padd->unpaddedMessage[data_len] = '\0';
 }
-//###############################
+// ###############################
 
-//initializes rndelement with a random value less than prime
+// initializes rndelement with a random value less than prime
 void generate_random_mpz(mpz_ptr prime, mpz_ptr rndelement) {
-    // Initialize LibTomCrypt PRNG
-    int prng_idx = register_prng(&sprng_desc);
-    if (prng_idx == -1) {
-        fprintf(stderr, "Error registering sprng\n");
+  // Initialize LibTomCrypt PRNG
+  int prng_idx = register_prng(&sprng_desc);
+  if (prng_idx == -1) {
+    fprintf(stderr, "Error registering sprng\n");
+  }
+
+  prng_state prng;
+  if (sprng_start(&prng) != CRYPT_OK || sprng_ready(&prng) != CRYPT_OK) {
+    fprintf(stderr, "Error initializing sprng\n");
+  }
+
+  size_t num_bytes = (mpz_sizeinbase(prime, 2) + 7) / 8;
+  unsigned char *buffer = malloc(num_bytes);
+  if (!buffer) {
+    fprintf(stderr, "Memory allocation failed\n");
+  }
+
+  mpz_t temp;
+  mpz_init(temp);
+
+  do {
+    // Generate cryptographically secure random bytes
+    if (sprng_read(buffer, num_bytes, NULL) != num_bytes) {
+      fprintf(stderr, "sprng_read failed\n");
+      free(buffer);
     }
 
-    prng_state prng;
-    if (sprng_start(&prng) != CRYPT_OK ||
-        sprng_ready(&prng) != CRYPT_OK) {
-        fprintf(stderr, "Error initializing sprng\n");
-    }
+    // Convert buffer to mpz_t
+    mpz_import(temp, num_bytes, 1, 1, 0, 0, buffer);
 
-    size_t num_bytes = (mpz_sizeinbase(prime, 2) + 7) / 8;
-    unsigned char *buffer = malloc(num_bytes);
-    if (!buffer) {
-        fprintf(stderr, "Memory allocation failed\n");
-    }
+  } while (mpz_cmp(temp, prime) > 0); // Retry if temp > q
 
-    mpz_t temp;
-    mpz_init(temp);
+  mpz_set(rndelement, temp);
 
-    do {
-        // Generate cryptographically secure random bytes
-        if (sprng_read(buffer, num_bytes, NULL) != num_bytes) {
-            fprintf(stderr, "sprng_read failed\n");
-            free(buffer);
-        }
-
-        // Convert buffer to mpz_t
-        mpz_import(temp, num_bytes, 1, 1, 0, 0, buffer);
-
-    } while (mpz_cmp(temp, prime) > 0); // Retry if temp > q
-
-    mpz_set(rndelement, temp);
-
-    mpz_clear(temp);
-    free(buffer);
+  mpz_clear(temp);
+  free(buffer);
 }
-//###### Thrss=(Share,ReConst) (Shamir Secret Sharing)
-void Thss_Config(DscThss *thss, int secparam_bits, int total, int threshold)
-{
-    thss->num_bits=secparam_bits;
-    thss->num_shares=total;
-    thss->threshold=threshold;
+// ###### Thrss=(Share,ReConst) (Shamir Secret Sharing)
+void Thss_Config(DscThss *thss, int secparam_bits, int total, int threshold) {
+  thss->num_bits = secparam_bits;
+  thss->num_shares = total;
+  thss->threshold = threshold;
 
-
-    thss->shares_x = (mpz_t*)malloc(thss->num_shares * sizeof(mpz_t));
-    thss->shares_y = (mpz_t*)malloc(thss->num_shares * sizeof(mpz_t));
-    mpz_init(thss->recovered_secret);
-    thss->coeffs = (mpz_t*)malloc((thss->threshold) * sizeof(mpz_t));
-    mpz_init(thss->prime);
+  thss->shares_x = (mpz_t *)malloc(thss->num_shares * sizeof(mpz_t));
+  thss->shares_y = (mpz_t *)malloc(thss->num_shares * sizeof(mpz_t));
+  mpz_init(thss->recovered_secret);
+  thss->coeffs = (mpz_t *)malloc((thss->threshold) * sizeof(mpz_t));
+  mpz_init(thss->prime);
 }
 // initilized thss->prime, if the prime argument is Null then generates a prime
-void Thss_KeyGen(DscThss *thss,mpz_ptr prime)
-{
-    //generate_random_prime(thss); 
-    if(prime){
-        mpz_set(thss->prime, prime);
-    }
-    else{
-        gmp_randstate_t state;
-        gmp_randinit_default(state);
-        time_t t;
-        srand((unsigned) time(&t));
-        unsigned long seed = rand();
-        gmp_randseed_ui(state, seed);
-        
-        mpz_t random_num;
-        mpz_init(random_num);
-        mpz_urandomb(random_num, state, thss->num_bits);
-        
-        mpz_nextprime(thss->prime, random_num);
-        
-        mpz_clear(random_num);
-        gmp_randclear(state);
-    }
+void Thss_KeyGen(DscThss *thss, mpz_ptr prime) {
+  // generate_random_prime(thss);
+  if (prime) {
+    mpz_set(thss->prime, prime);
+  } else {
+    gmp_randstate_t state;
+    gmp_randinit_default(state);
+    time_t t;
+    srand((unsigned)time(&t));
+    unsigned long seed = rand();
+    gmp_randseed_ui(state, seed);
+
+    mpz_t random_num;
+    mpz_init(random_num);
+    mpz_urandomb(random_num, state, thss->num_bits);
+
+    mpz_nextprime(thss->prime, random_num);
+
+    mpz_clear(random_num);
+    gmp_randclear(state);
+  }
 }
-//find (thss->num_shares) points on the polynomial, if secret is NULL then generates one randomly
-void Thss_Share(DscThss *thss,mpz_ptr secret)
-{
-    mpz_init(thss->secret);
-    if(!secret){
-        generate_random_mpz(thss->prime,thss->secret);
-    }
-    else{    
-        mpz_set(thss->secret,secret);
-    }
-    mpz_init(thss->coeffs[0]);
-    mpz_set(thss->coeffs[0], thss->secret);
+// find (thss->num_shares) points on the polynomial, if secret is NULL then
+// generates one randomly
+void Thss_Share(DscThss *thss, mpz_ptr secret) {
+  mpz_init(thss->secret);
+  if (!secret) {
+    generate_random_mpz(thss->prime, thss->secret);
+  } else {
+    mpz_set(thss->secret, secret);
+  }
+  mpz_init(thss->coeffs[0]);
+  mpz_set(thss->coeffs[0], thss->secret);
 
-    for (int i = 1; i < thss->threshold; i++) {
-        mpz_init(thss->coeffs[i]);
-        generate_random_mpz(thss->prime, thss->coeffs[i]);
-    }
+  for (int i = 1; i < thss->threshold; i++) {
+    mpz_init(thss->coeffs[i]);
+    generate_random_mpz(thss->prime, thss->coeffs[i]);
+  }
 
-    mpz_t x;
-    mpz_init(x);
-    for (int i = 0; i < thss->num_shares; i++) {
-        mpz_set_ui(x, i + 1); // مقادیر x باید منحصر به فرد باشند
-        mpz_init(thss->shares_x[i]);
-        mpz_init(thss->shares_y[i]);
-        mpz_set(thss->shares_x[i], x);
-        mpz_set_ui(thss->shares_y[i], 0);
-        mpz_t term;
-        mpz_init(term);
+  mpz_t x;
+  mpz_init(x);
+  for (int i = 0; i < thss->num_shares; i++) {
+    mpz_set_ui(x, i + 1); // مقادیر x باید منحصر به فرد باشند
+    mpz_init(thss->shares_x[i]);
+    mpz_init(thss->shares_y[i]);
+    mpz_set(thss->shares_x[i], x);
+    mpz_set_ui(thss->shares_y[i], 0);
+    mpz_t term;
+    mpz_init(term);
 
-        for (int j = thss->threshold - 1; j >= 0; j--) {
-            mpz_mul(term, thss->shares_y[i], thss->shares_x[i]);        
-            mpz_mod(term, term, thss->prime);    
-            mpz_add(thss->shares_y[i], term, thss->coeffs[j]);
-            mpz_mod(thss->shares_y[i], thss->shares_y[i], thss->prime);
-        }
-        mpz_clear(term);
+    for (int j = thss->threshold - 1; j >= 0; j--) {
+      mpz_mul(term, thss->shares_y[i], thss->shares_x[i]);
+      mpz_mod(term, term, thss->prime);
+      mpz_add(thss->shares_y[i], term, thss->coeffs[j]);
+      mpz_mod(thss->shares_y[i], thss->shares_y[i], thss->prime);
     }
-    mpz_clear(x);
-    for(int i =0; i<thss->threshold;i++){
-        mpz_clear(thss->coeffs[i]);
-    }
-    free(thss->coeffs);
+    mpz_clear(term);
+  }
+  mpz_clear(x);
+  for (int i = 0; i < thss->threshold; i++) {
+    mpz_clear(thss->coeffs[i]);
+  }
+  free(thss->coeffs);
 }
-void Thss_ReCons(DscThss *thss)
-{
-    mpz_set_ui(thss->recovered_secret, 0);
-    mpz_t term,numerator,denominator,temp;
-    mpz_inits(term,numerator,denominator,temp,NULL);
+void Thss_ReCons(DscThss *thss) {
+  mpz_set_ui(thss->recovered_secret, 0);
+  mpz_t term, numerator, denominator, temp;
+  mpz_inits(term, numerator, denominator, temp, NULL);
 
-    for (int i = 0; i < thss->threshold; i++) {
-        mpz_set_ui(term, 1);
-        for (int j = 0; j < thss->threshold; j++) {
-            if (i != j) {
-                mpz_sub(numerator, thss->shares_x[j], thss->shares_x[i]);
-                mpz_set(denominator, numerator);
-                mpz_set_ui(temp, 0);
-                mpz_add(temp, temp, thss->shares_x[j]);
-                mpz_mul(term, term, temp);
-                mpz_mod(term, term, thss->prime);
-                mpz_invert(denominator, denominator, thss->prime);
-                mpz_mul(term, term, denominator);
-                mpz_mod(term, term, thss->prime);
-            }
-        }
-        mpz_mul(term, term, thss->shares_y[i]);
+  for (int i = 0; i < thss->threshold; i++) {
+    mpz_set_ui(term, 1);
+    for (int j = 0; j < thss->threshold; j++) {
+      if (i != j) {
+        mpz_sub(numerator, thss->shares_x[j], thss->shares_x[i]);
+        mpz_set(denominator, numerator);
+        mpz_set_ui(temp, 0);
+        mpz_add(temp, temp, thss->shares_x[j]);
+        mpz_mul(term, term, temp);
         mpz_mod(term, term, thss->prime);
-        mpz_add(thss->recovered_secret, thss->recovered_secret, term);
-        mpz_mod(thss->recovered_secret, thss->recovered_secret, thss->prime);
+        mpz_invert(denominator, denominator, thss->prime);
+        mpz_mul(term, term, denominator);
+        mpz_mod(term, term, thss->prime);
+      }
     }
-    for (int i = 0; i < thss->threshold; i++) {
-        mpz_clear(thss->shares_x[i]);
-        mpz_clear(thss->shares_y[i]);
-    }
-    free(thss->shares_x);
-    free(thss->shares_y);
-    mpz_clears(term,numerator,denominator,temp,NULL);
+    mpz_mul(term, term, thss->shares_y[i]);
+    mpz_mod(term, term, thss->prime);
+    mpz_add(thss->recovered_secret, thss->recovered_secret, term);
+    mpz_mod(thss->recovered_secret, thss->recovered_secret, thss->prime);
+  }
+  for (int i = 0; i < thss->threshold; i++) {
+    mpz_clear(thss->shares_x[i]);
+    mpz_clear(thss->shares_y[i]);
+  }
+  free(thss->shares_x);
+  free(thss->shares_y);
+  mpz_clears(term, numerator, denominator, temp, NULL);
 }
-//###############################
-
-
+void Thss_Free(DscThss *thss) {
+  mpz_clears(thss->secret, thss->prime, thss->recovered_secret, NULL);
+}
+// ###############################
 //###### ThrCrypt=(DKeyGen,Enc,Dec) (Threshold Elgamal Cryptosystem)
-void ThrCrypt_Config(DscThrCrypt *thrcrypt,int secparam_bits,int total, int thrshld) {
+void ThrCrypt_Config(DscThrCrypt *thrcrypt,u_int16_t secparam_bits,u_int16_t total, u_int16_t threshold) {
 
     thrcrypt->secparam_bits=secparam_bits;
-    char *str="1234";
-    thrcrypt->plaintextInput=malloc(strlen(str)*sizeof(char) + 1);
-    strcpy(thrcrypt->plaintextInput,str);
-
-    Thss_Config(&(thrcrypt->thss),secparam_bits,total,thrshld);
-    thrcrypt->partialDectypted=malloc((&(thrcrypt->thss))->threshold * sizeof(mpz_t));
-    thrcrypt->plaintextOutput=malloc(2*strlen(thrcrypt->plaintextInput));
-
+    Thss_Config(&(thrcrypt->thss),secparam_bits,total,threshold);
+    thrcrypt->partialDecrypted=malloc(threshold * sizeof(mpz_t));
     GroupGen_Config(&(thrcrypt->grp));
     thrcrypt->grp.secparam=secparam_bits;
 
     mpz_inits(thrcrypt->pkey,thrcrypt->skey,thrcrypt->input,thrcrypt->output1
-        ,thrcrypt->output2,thrcrypt->dectypted,NULL);
+        ,thrcrypt->output2,thrcrypt->decrypted,NULL);
 }
 
-void ThrCrypt_DKeyGen(DscThrCrypt *thrcrypt){
-    GroupGen(&(thrcrypt->grp));
+void ThrCrypt_DKeyGen(DscThrCrypt *thrcrypt,mpz_ptr prime){
+    if(prime){
+      mpz_set(thrcrypt->grp.prime,prime);
+      mpz_set_ui(thrcrypt->grp.generator,2);
+      mpz_sub_ui(thrcrypt->grp.order,thrcrypt->grp.prime,1);
+    }
+    else {
+      GroupGen(&(thrcrypt->grp));
+    }
     Thss_KeyGen(&(thrcrypt->thss),thrcrypt->grp.prime);
     Thss_Share(&(thrcrypt->thss),NULL);
     
     mpz_set(thrcrypt->skey,thrcrypt->thss.secret);
     mpz_powm(thrcrypt->pkey, thrcrypt->grp.generator, thrcrypt->skey, thrcrypt->thss.prime);
 }
-void ThrCrypt_ENC(DscThrCrypt *thrcrypt){
+//plaintext can be any series of bytes, doesn't have to be a string
+void ThrCrypt_ENC(DscThrCrypt *thrcrypt,char* plaintext, u_int32_t size){
+  thrcrypt->plaintextInput = plaintext;
+  encode_bytes_as_mpz(thrcrypt->input, thrcrypt->plaintextInput, size);
+  mpz_t k;
+  mpz_init(k); 
+  mpz_urandomm(k,thrcrypt->grp.state, thrcrypt->grp.generator);
 
-    mpz_import(thrcrypt->input, strlen(thrcrypt->plaintextInput), 1, sizeof(char), 0, 0, thrcrypt->plaintextInput);
+  // c1 = g^k mod p
+  mpz_powm(thrcrypt->output1, thrcrypt->grp.generator,k, thrcrypt->grp.prime);
 
-    mpz_t k;
-    mpz_init(k); 
-    mpz_urandomm(k,thrcrypt->grp.state, thrcrypt->grp.generator);
-
-    // c1 = g^k mod p
-    mpz_powm(thrcrypt->output1, thrcrypt->grp.generator,k, thrcrypt->grp.prime);
-
-    // c2 = m * y^k mod p
-    mpz_powm(thrcrypt->output2, thrcrypt->pkey, k, thrcrypt->grp.prime);
-    mpz_mul(thrcrypt->output2, thrcrypt->output2, thrcrypt->input);
-    mpz_mod(thrcrypt->output2, thrcrypt->output2, thrcrypt->grp.prime);
-    mpz_clear(k);
+  // c2 = m * y^k mod p
+  mpz_powm(thrcrypt->output2, thrcrypt->pkey, k, thrcrypt->grp.prime);
+  mpz_mul(thrcrypt->output2, thrcrypt->output2, thrcrypt->input);
+  mpz_mod(thrcrypt->output2, thrcrypt->output2, thrcrypt->grp.prime);
+  mpz_clear(k);
 }
 void ThrCrypt_Dec(DscThrCrypt *thrcrypt)
 {
@@ -813,7 +784,7 @@ void ThrCrypt_Dec(DscThrCrypt *thrcrypt)
 
     for (int i = 0; i < thrcrypt->thss.threshold; i++) {
         mpz_set_ui(term, 1);
-        mpz_init(thrcrypt->partialDectypted[i]);
+        mpz_init(thrcrypt->partialDecrypted[i]);
         for (int j = 0; j < thrcrypt->thss.threshold; j++) {
             if (i != j) {
                  mpz_sub(numerator, thrcrypt->thss.shares_x[j], thrcrypt->thss.shares_x[i]);
@@ -828,22 +799,57 @@ void ThrCrypt_Dec(DscThrCrypt *thrcrypt)
             }
         }
         mpz_mul(term, term, thrcrypt->thss.shares_y[i]);
-        mpz_mod(thrcrypt->partialDectypted[i], term, (thrcrypt->grp.prime));
+        mpz_mod(thrcrypt->partialDecrypted[i], term, (thrcrypt->grp.prime));
         mpz_add(thrcrypt->thss.recovered_secret, thrcrypt->thss.recovered_secret, term);
         mpz_mod(thrcrypt->thss.recovered_secret, thrcrypt->thss.recovered_secret, (thrcrypt->grp.prime));
     }
     mpz_clears(term,numerator,denominator,temp,NULL);
+    for (int i = 0; i < thrcrypt->thss.threshold; i++) {
+      mpz_clear(thrcrypt->thss.shares_x[i]);
+      mpz_clear(thrcrypt->thss.shares_y[i]);
+    }
+    free(thrcrypt->thss.shares_x);
+    free(thrcrypt->thss.shares_y);
     mpz_t s, m;
     mpz_inits(s,m,NULL);
     
     mpz_powm(s, thrcrypt->output1, thrcrypt->thss.recovered_secret, thrcrypt->grp.prime);
     mpz_invert(s, s, thrcrypt->grp.prime);
     mpz_mul(m, thrcrypt->output2, s);
-    mpz_init(thrcrypt->dectypted);
-    mpz_mod(thrcrypt->dectypted, m, thrcrypt->grp.prime);
-    
-    size_t count;
-    mpz_export(thrcrypt->plaintextOutput, &count, 1, sizeof(char), 0, 0, thrcrypt->dectypted);
-    thrcrypt->plaintextOutput[count] = '\0';
+    mpz_init(thrcrypt->decrypted);
+    mpz_mod(thrcrypt->decrypted, m, thrcrypt->grp.prime);
     mpz_clears(s,m,NULL);
+
+    decode_mpz_as_byteArray(&(thrcrypt->plaintextOutput), thrcrypt->decrypted);
+    mpz_clear(thrcrypt->decrypted);
+}
+void ThrCrypt_Free(DscThrCrypt *thrcrypt) {
+  for (int i = 0; i < thrcrypt->thss.threshold; i++) {
+    mpz_clear(thrcrypt->partialDecrypted[i]);
+  }
+  free(thrcrypt->partialDecrypted);
+  free(thrcrypt->plaintextOutput);
+  mpz_clears(thrcrypt->skey,thrcrypt->pkey,thrcrypt->output1,thrcrypt->output2,NULL);
+  Thss_Free(&(thrcrypt->thss));
+  GroupGen_Free(&(thrcrypt->grp));
+}
+//convert byteArray with the specified size to mpz_t (rop must be initialized)
+void encode_bytes_as_mpz(mpz_ptr rop, char *byteArray, u_int32_t size) {
+  char* paddedMessage = malloc(size + 1);
+  paddedMessage[0] = 1; // padding
+  for (int i = 1; i <= size; i++) {
+    paddedMessage[i] = byteArray[i - 1];
+  }
+  mpz_import(rop, size+1, 1, sizeof(char), 0, 0,
+              paddedMessage);
+  free(paddedMessage);
+}
+//converts back the integer to byteArray, (rop will be allocated in this function)
+void decode_mpz_as_byteArray(char** rop, mpz_ptr integer){
+  size_t bytes = mpz_size(integer) * sizeof(mp_limb_t);
+  char* paddedMessage = malloc(bytes);
+  mpz_export(paddedMessage, &bytes, 1, sizeof(char), 0, 0, integer);
+  *rop = (char *)malloc(bytes - 1);
+  memcpy(*rop, paddedMessage + 1, bytes - 1);
+  free(paddedMessage);
 }
