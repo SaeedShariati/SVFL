@@ -30,10 +30,11 @@
 
 //=========================================== STRUCTURE DEFINITION =================================
 /*========================= Hash Struct =====================================================*/
+#include <sys/types.h>
 typedef struct DscHash
 {
     int secparam; /*security parameter*/
-    unsigned char *plaintextInput; // plaintext (befor hash) in format string
+    char *plaintextInput; // plaintext (befor hash) in format string
     unsigned char *DigestOutput; // digest (after hash) in format byte
     unsigned long output_len;//this item determines digest lenght
     char *hash_name;//this item determines name of hash function that we will use
@@ -104,8 +105,8 @@ typedef struct {
 /*Structure Definition For Pseodu-Random Function*/
 typedef struct {
     int secparam; /*security parameter*/
-    unsigned char *key; /*secret key*/
-    unsigned char *plaintextInput; // plaintext (befor encryption) in format string
+    char *key; /*secret key*/
+    char *plaintextInput; // plaintext (befor encryption) in format string
     unsigned char *randomOutput; // ciphertext (after encryption) in format string
 } DscPRF;
 /*===========================================================================================*/
@@ -113,8 +114,8 @@ typedef struct {
 /*Structure Definition For Hash-Mac Function*/
 typedef struct {
     int secparam; /*security parameter*/
-    unsigned char *key; /*secret key*/
-    unsigned char *plaintextInput; // plaintext (befor encryption) in format string
+    char *key; /*secret key*/
+    char *plaintextInput; // plaintext (befor encryption) in format string
     unsigned char *DigestOutput; // ciphertext (after encryption) in format string
     unsigned long output_len;//this item determines digest lenght
 } DscHMAC;
@@ -125,7 +126,7 @@ typedef struct {
     int secparam; /*security parameter*/
     unsigned char *randomOutput; // extended random value
     //unsigned long output_len;
-    int size; //size of randomOutput in bytes
+    u_int32_t size; //size of randomOutput in bytes
     DscHMAC hmac; // seed relatoed to prg is key of HMAC
 } DscPRG;
 /*===========================================================================================*/
@@ -226,7 +227,6 @@ typedef struct
     mpz_t *sharedSecret;
     mpz_t skey;
 }DscKAgreeV1;
-
 //=========================================== STRUCTURE DEFINITION =================================
 //           +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 //++++++++++                                                                                ++++++++++
@@ -331,6 +331,7 @@ printf("In MegaByte: %.2f\n\n",spacemeasure.sizeInMBytes);
 void HMAC_Config(DscHMAC *hmac, int secparam);
 void HMAC_KeyGen(DscHMAC *hmac);
 void HMAC_Eval(DscHMAC *hmac);
+void HMAC_Free(DscHMAC *hmac);
 /*++++++++++ Test Program - HAMC ++++++++++++++++ 
     DscHMAC hmac;
     HMAC_Config(&hmac,16);
@@ -356,7 +357,7 @@ void HMAC_Eval(DscHMAC *hmac);
 void PRF_Config(DscPRF *prf,int secparam);
 void PRF_KeyGen(DscPRF *prf);
 void PRF_Eval(DscPRF *prf);
-
+void PRF_Free(DscPRF *prf);
 /*++++++++++ Test Program - PRF +++++++++++++++++ 
     DscPRF prf;
     PRF_Config(&prf,16);
@@ -381,26 +382,36 @@ void PRF_Eval(DscPRF *prf);
 
 
 //############ PRG=(SeedGen,Eval) #############################################
-void PRG_Config(DscPRG *prg, int secparam, int rate);
+void PRG_Config(DscPRG *prg, int secparam, u_int32_t size);
 void PRG_SeedGen(DscPRG *prg);
 void PRG_Eval(DscPRG *prg);
+void PRG_Free(DscPRG *prg);
 /*++++++++++ Test Program - PRG +++++++++++++++++ 
-    DscPRG prg;
-    PRG_Config(&prg,16,3);
+   DscPRG prg;
+   PRG_Config(&prg,16,32);
 
-    PRG_SeedGen(&prg);
-    printf("\nSeed = ");
-    for (int i = 0; i < prg.secparam; i++) {
-        printf("%02x", prg.hmac.key[i]);
-    }
-    printf("\n");
+   PRG_SeedGen(&prg);
+   printf("\nSeed = ");
+   for (int i = 0; i < prg.secparam; i++) {
+       printf("%02x", prg.hmac.key[i]);
+   }
+   printf("\n");
 
-    PRG_Eval(&prg);
-    printf("\nPRG(seed,rate=%d): ",prg.extendedRate);
-    for (int i = 0; i < ((prg.extendedRate)*((&(prg.hmac))->secparam)); i++) {
-        printf("%02x", prg.randomOutput[i]);
-    }
-    printf("\n\n");
+   PRG_Eval(&prg);
+   printf("\nPRG1(seed,size=%"PRIu32"): ", prg.size);
+   for (int i = 0; i < prg.size; i++) {
+       printf("%02x", prg.randomOutput[i]);
+   }
+   PRG_SeedGen(&prg);
+   //prg.hmac.key="thisddddd";
+   printf("\n\n");
+   PRG_Eval(&prg);
+   printf("\nPRG(seed,size=%"PRIu32"): ", prg.size);
+
+   for (int i = 0; i < prg.size; i++) {
+       printf("%02x", prg.randomOutput[i]);
+   }
+   PRG_Free(&prg);
 +++++++++++++++++++++++++++++++++++++++++++++++++*/
 //#############################################################################
 

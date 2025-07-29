@@ -1,10 +1,10 @@
+#include <sys/types.h>
 #include <tomcrypt.h>
 #include <gmp.h>
 #include <pbc/pbc.h>
 #include <unistd.h>
 #include <string.h>
 #include <time.h>
-#include <math.h>
 #include <stdbool.h>
 #include "CryptoPrimitivesV1.h"
 
@@ -43,14 +43,13 @@ void Space_Measure(DscSpaceMeasure *space)
 void HMAC_Config(DscHMAC *hmac, int secparam)
 {
     hmac->secparam=secparam;
-    hmac->plaintextInput = (unsigned char *)"I am a computer science student";
-    //hmac->plaintextInput="I am a computer science student"; 
-    hmac->DigestOutput=malloc(hmac->secparam);
+    hmac->plaintextInput = "I am a computer science student";
+    hmac->DigestOutput=malloc(32);
     hmac->key=malloc(hmac->secparam);
 }
 void HMAC_KeyGen(DscHMAC *hmac)
 {
-if (rng_get_bytes(hmac->key, hmac->secparam, NULL) != hmac->secparam)
+if (rng_get_bytes((unsigned char*)hmac->key, hmac->secparam, NULL) != hmac->secparam)
  {
         printf("Error generating random key\n");
  }
@@ -60,9 +59,9 @@ void HMAC_Eval(DscHMAC *hmac)
     int err;
     
     register_hash(&sha256_desc);
-    
-    err = hmac_memory(find_hash("sha256"), hmac->key,hmac->secparam,
-                      hmac->plaintextInput,strlen((const char *)hmac->plaintextInput),
+    hmac->output_len = 32;
+    err = hmac_memory(find_hash("sha256"), (unsigned char*)hmac->key,hmac->secparam,
+                      (unsigned char*)hmac->plaintextInput,strlen((const char *)hmac->plaintextInput),
                       hmac->DigestOutput, &(hmac->output_len));
     
 
@@ -70,6 +69,10 @@ void HMAC_Eval(DscHMAC *hmac)
         printf("Error performing HMAC: %s\n", error_to_string(err));
     }
  
+}
+void HMAC_Free(DscHMAC *hmac){
+    free(hmac->DigestOutput);
+    free(hmac->key);
 }
 //############################################
 
@@ -80,13 +83,13 @@ void PRF_Config(DscPRF *prf,int secparam)
     prf->secparam=secparam;
     prf->plaintextInput=malloc(prf->secparam);
     strcpy((char *)prf->plaintextInput, "I am a student");
-    prf->randomOutput=malloc(prf->secparam);
+    prf->randomOutput=malloc(32);
     prf->key=malloc(prf->secparam);
     
 }
 void PRF_KeyGen(DscPRF *prf)
 {
-if (rng_get_bytes(prf->key, prf->secparam, NULL) != prf->secparam)
+if (rng_get_bytes((unsigned char*)prf->key, prf->secparam, NULL) != prf->secparam)
  {
         printf("Error generating random key\n");
  }
@@ -96,21 +99,25 @@ void PRF_Eval(DscPRF *prf)
     int err;
     //unsigned long *tmp;
 
-    unsigned long output_len=prf->secparam;
+    unsigned long output_len=32;
     register_hash(&sha256_desc);
-    err = hmac_memory(find_hash("sha256"), prf->key,prf->secparam,
-                      prf->plaintextInput, strlen((const char *)prf->plaintextInput),
+    err = hmac_memory(find_hash("sha256"), (unsigned char*)prf->key,prf->secparam,
+                      (unsigned char*)prf->plaintextInput, strlen((const char *)prf->plaintextInput),
                       prf->randomOutput, &(output_len));
 
     if (err != CRYPT_OK) {
         printf("Error performing PRF: %s\n", error_to_string(err));
     }
 }
-
+void PRF_Free(DscPRF *prf){
+    free(prf->plaintextInput);
+    free(prf->key);
+    free(prf->randomOutput);
+}
 
 
 //############ PRG=(SeedGen,Eval) ############
-void PRG_Config(DscPRG *prg, int secparam, int size)
+void PRG_Config(DscPRG *prg, int secparam, u_int32_t size)
 {
     prg->secparam=secparam;
     prg->size=size;
@@ -118,9 +125,9 @@ void PRG_Config(DscPRG *prg, int secparam, int size)
 void PRG_SeedGen(DscPRG *prg)
 {
     (&(prg->hmac))->secparam=prg->secparam;
-    (&(prg->hmac))->plaintextInput = (unsigned char *)malloc(strlen("An inital value          ") + 1);
+    (&(prg->hmac))->plaintextInput = malloc(strlen("An inital value          ")+1);
     strcpy((&(prg->hmac))->plaintextInput, "An inital value          ");
-    (&(prg->hmac))->DigestOutput=malloc((&(prg->hmac))->secparam);
+    (&(prg->hmac))->DigestOutput=malloc(32);
     (&(prg->hmac))->key=malloc((&(prg->hmac))->secparam);
     //(&(prg->hmac))->output_len = 16;
     prg->randomOutput=malloc(prg->size);  
@@ -135,11 +142,11 @@ void PRG_Eval(DscPRG *prg) {
     size_t input_len = strlen((char *)prg->hmac.plaintextInput);
     size_t counter_size = sizeof(counter);
 
-    char counter_str[5];
+    char counter_str[5] = {0};
     unsigned long temp_output_len = (&(prg->hmac))->secparam;
     unsigned long bytes_to_copy = 0;
     while (remaining > 0) {
-        sprintf(counter_str, "%d", counter);
+        sprintf(counter_str, "%lu", counter);
         memcpy(prg->hmac.plaintextInput + 16, &counter_str, 5);  
         HMAC_Eval(&(prg->hmac));
         bytes_to_copy = (remaining < temp_output_len) ? remaining : temp_output_len;
@@ -150,7 +157,11 @@ void PRG_Eval(DscPRG *prg) {
         remaining -= bytes_to_copy;
         counter++;
     }
-
+}
+void PRG_Free(DscPRG *prg){
+    free(prg->randomOutput);
+    HMAC_Free(&(prg->hmac));
+    free(prg->hmac.plaintextInput);
 }
 
 //############ Hash=(Eval) ############
@@ -191,7 +202,10 @@ void Hash_Eval(DscHash *hash) {
     hash->output_len = hash_descriptor[hash_idx].hashsize;
 
     // Compute the hash
-    err = hash_memory(hash_idx, hash->plaintextInput, strlen((const char *)hash->plaintextInput) - 1, hash->DigestOutput, &(hash->output_len));    if (err != CRYPT_OK) {
+    err = hash_memory(hash_idx, (unsigned char*)hash->plaintextInput, 
+    strlen((const char *)hash->plaintextInput) - 1, hash->DigestOutput,
+     &(hash->output_len));    
+     if (err != CRYPT_OK) {
         printf("Error performing hash: %s\n", error_to_string(err));
         exit(EXIT_FAILURE);
     }
@@ -469,7 +483,7 @@ void DS_Sign(DscDS *ds)
 
     char *temp2=realloc(ds->hash.plaintextInput, strlen(str));
     if (temp2 !=NULL){
-        ds->hash.plaintextInput = (unsigned char *)temp2;
+        ds->hash.plaintextInput = temp2;
     }
 
     strcpy((char *)ds->hash.plaintextInput,str);
@@ -518,7 +532,7 @@ void DS_Vrfy(DscDS *ds)
 
   char *temp=realloc(ds->hash.plaintextInput, strlen(str));
     if (temp !=NULL){
-        ds->hash.plaintextInput=(unsigned char *)temp;
+        ds->hash.plaintextInput=temp;
     }
         strcpy((char *)ds->hash.plaintextInput, str);
     Hash_Eval(&(ds->hash));
@@ -778,18 +792,18 @@ void ThrCrypt_ENC(DscThrCrypt *thrcrypt){
 
     mpz_import(thrcrypt->input, strlen(thrcrypt->plaintextInput), 1, sizeof(char), 0, 0, thrcrypt->plaintextInput);
 
-    mpz_t r;
-    mpz_init(r); 
-    mpz_urandomm(r,thrcrypt->grp.state, thrcrypt->grp.generator);
+    mpz_t k;
+    mpz_init(k); 
+    mpz_urandomm(k,thrcrypt->grp.state, thrcrypt->grp.generator);
 
     // c1 = g^k mod p
-    mpz_powm(thrcrypt->output1, thrcrypt->grp.generator,r, thrcrypt->grp.prime);
+    mpz_powm(thrcrypt->output1, thrcrypt->grp.generator,k, thrcrypt->grp.prime);
 
     // c2 = m * y^k mod p
-    mpz_powm(thrcrypt->output2, thrcrypt->pkey, r, thrcrypt->grp.prime);
+    mpz_powm(thrcrypt->output2, thrcrypt->pkey, k, thrcrypt->grp.prime);
     mpz_mul(thrcrypt->output2, thrcrypt->output2, thrcrypt->input);
     mpz_mod(thrcrypt->output2, thrcrypt->output2, thrcrypt->grp.prime);
-
+    mpz_clear(k);
 }
 void ThrCrypt_Dec(DscThrCrypt *thrcrypt)
 {
