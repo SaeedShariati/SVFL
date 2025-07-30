@@ -358,7 +358,7 @@ void HMAC_Free(DscHMAC *hmac);
 //############ PRF=(KeyGen,Eval) ##############################################
 void PRF_Config(DscPRF *prf,int secparam);
 void PRF_KeyGen(DscPRF *prf);
-void PRF_Eval(DscPRF *prf);
+void PRF_Eval(DscPRF *prf,char* message,u_int32_t size);
 void PRF_Free(DscPRF *prf);
 /*++++++++++ Test Program - PRF +++++++++++++++++ 
     DscPRF prf;
@@ -420,7 +420,8 @@ void PRG_Free(DscPRG *prg);
 
 //############ Hash=(Eval) ####################################################
 void Hash_Config(DscHash *hash,int secparam);
-void Hash_Eval(DscHash *hash);
+void Hash_Eval(DscHash *hash,char* plaintext,u_int32_t size);
+void Hash_Free(DscHash* hash);
 /*++++++++++ Test Program - Hash ++++++++++++++++ 
     DscHash hash;
     Hash_Config(&hash,32);
@@ -438,7 +439,7 @@ void Hash_Eval(DscHash *hash);
 
 
 //############ GroupGen (GMP) ##################################################
-void GroupGen_Config(DscGrp *grp);
+void GroupGen_Config(DscGrp *grp, u_int32_t secparam);
 void GroupGen(DscGrp *grp);
 void GroupGen_Free(DscGrp *grp);
 /*++++++++++ Test Program - GroupGen +++++++++++ 

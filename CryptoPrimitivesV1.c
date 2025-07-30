@@ -70,8 +70,6 @@ void HMAC_Free(DscHMAC *hmac) {
 // ############ PRF=(KeyGen,Eval) #############
 void PRF_Config(DscPRF *prf, int secparam) {
   prf->secparam = secparam;
-  prf->plaintextInput = malloc(prf->secparam);
-  strcpy((char *)prf->plaintextInput, "I am a student");
   prf->randomOutput = malloc(32);
   prf->key = malloc(prf->secparam);
 }
@@ -81,15 +79,14 @@ void PRF_KeyGen(DscPRF *prf) {
     printf("Error generating random key\n");
   }
 }
-void PRF_Eval(DscPRF *prf) {
+void PRF_Eval(DscPRF *prf,char* message,u_int32_t size) {
   int err;
-  // unsigned long *tmp;
-
+  prf->plaintextInput = message;
   unsigned long output_len = 32;
   register_hash(&sha256_desc);
   err = hmac_memory(find_hash("sha256"), (unsigned char *)prf->key,
-                    prf->secparam, (unsigned char *)prf->plaintextInput,
-                    strlen((const char *)prf->plaintextInput),
+                    prf->secparam, (unsigned char *)message,
+                    size,
                     prf->randomOutput, &(output_len));
 
   if (err != CRYPT_OK) {
@@ -97,7 +94,6 @@ void PRF_Eval(DscPRF *prf) {
   }
 }
 void PRF_Free(DscPRF *prf) {
-  free(prf->plaintextInput);
   free(prf->key);
   free(prf->randomOutput);
 }
@@ -161,22 +157,15 @@ void Hash_Config(DscHash *hash, int secparam) {
   MD2:    register_hash (&md2_desc);
   MD4:    register_hash (&md4_desc);
   MD5:    register_hash (&md5_desc);*/
-  char *str = "Example input data";
-  assert(hash != NULL);
-  // if (!hash) { perror("malloc failed"); exit(1); }
-  hash->plaintextInput = malloc(strlen(str) + 1); // allocate string copy
-  // if (!hash->plaintextInput) { perror("malloc failed"); exit(1); }
-  strcpy((char *)hash->plaintextInput, str);
-
   hash->secparam = secparam;
   hash->DigestOutput = malloc(32); // Adjust buffer size for safety
   register_hash(&sha256_desc);
   hash->hash_name = "sha256";
 }
-void Hash_Eval(DscHash *hash) {
+void Hash_Eval(DscHash *hash,char* plaintext,u_int32_t size) {
   int err, hash_idx;
 
-  // Find the hash function by name
+  hash->plaintextInput = plaintext;
 
   hash_idx = find_hash(hash->hash_name);
   if (hash_idx == -1) {
@@ -189,17 +178,19 @@ void Hash_Eval(DscHash *hash) {
 
   // Compute the hash
   err = hash_memory(hash_idx, (unsigned char *)hash->plaintextInput,
-                    strlen((const char *)hash->plaintextInput) - 1,
-                    hash->DigestOutput, &(hash->output_len));
+                    size,hash->DigestOutput, &(hash->output_len));
   if (err != CRYPT_OK) {
     printf("Error performing hash: %s\n", error_to_string(err));
     exit(EXIT_FAILURE);
   }
 }
+void Hash_Free(DscHash* hash){
+  free(hash->DigestOutput);
+}
 // ###############################
 // initilizes prime, generator and order and sets secparam=512 bits
-void GroupGen_Config(DscGrp *grp) {
-  grp->secparam = 512;
+void GroupGen_Config(DscGrp *grp, u_int32_t secparam) {
+  grp->secparam = secparam;
   mpz_init(grp->prime);
   mpz_init(grp->generator);
   mpz_init(grp->order);
@@ -382,8 +373,7 @@ void SKE_DEC(DscAES *aes) {
 
 // ###### PKE=(KeyGen,Enc,Dec) (Elgamel)
 void PKE_Config(DscElg *elg) {
-  GroupGen_Config(&(elg->grp));
-  elg->grp.secparam = 256;
+  GroupGen_Config(&(elg->grp),256);
   char *str = "This is example";
   elg->plaintextInput = malloc(strlen(str));
   strcpy(elg->plaintextInput, str);
@@ -436,8 +426,7 @@ void DS_Config(DscDS *ds) {
   strcpy(ds->plaintextInput, str);
   ds->isValid = false;
   Hash_Config(&(ds->hash), 32);
-  GroupGen_Config(&(ds->grp));
-  ds->grp.secparam = 512;
+  GroupGen_Config(&(ds->grp),512);
   mpz_inits(ds->skey, ds->pkey, ds->tag1, ds->tag2, NULL);
 }
 void DS_KeyGen(DscDS *ds) {
@@ -472,7 +461,7 @@ void DS_Sign(DscDS *ds) {
 
   strcpy((char *)ds->hash.plaintextInput, str);
   free(str);
-  Hash_Eval(&(ds->hash));
+  Hash_Eval(&(ds->hash),"123",3);
 
   mpz_import(ds->tag1, strlen((const char *)(&(ds->hash))->DigestOutput), 1,
              sizeof(char), 0, 0, (&(ds->hash))->DigestOutput);
@@ -515,7 +504,7 @@ void DS_Vrfy(DscDS *ds) {
     ds->hash.plaintextInput = temp;
   }
   strcpy((char *)ds->hash.plaintextInput, str);
-  Hash_Eval(&(ds->hash));
+  Hash_Eval(&(ds->hash),"123",3);
 
   // mpz_import(temp4, strlen((&(ds->hash))->DigestOutput), 1, sizeof(char), 0,
   // 0, (&(ds->hash))->DigestOutput);
@@ -737,15 +726,14 @@ void ThrCrypt_Config(DscThrCrypt *thrcrypt,u_int16_t secparam_bits,u_int16_t tot
     thrcrypt->secparam_bits=secparam_bits;
     Thss_Config(&(thrcrypt->thss),secparam_bits,total,threshold);
     thrcrypt->partialDecrypted=malloc(threshold * sizeof(mpz_t));
-    GroupGen_Config(&(thrcrypt->grp));
-    thrcrypt->grp.secparam=secparam_bits;
-
+    GroupGen_Config(&(thrcrypt->grp),secparam_bits);
     mpz_inits(thrcrypt->pkey,thrcrypt->skey,thrcrypt->input,thrcrypt->output1
         ,thrcrypt->output2,thrcrypt->decrypted,NULL);
 }
 
 void ThrCrypt_DKeyGen(DscThrCrypt *thrcrypt,mpz_ptr prime){
     if(prime){
+      thrcrypt->grp.secparam = mpz_sizeinbase(thrcrypt->grp.prime, 2);
       mpz_set(thrcrypt->grp.prime,prime);
       mpz_set_ui(thrcrypt->grp.generator,2);
       mpz_sub_ui(thrcrypt->grp.order,thrcrypt->grp.prime,1);
@@ -763,6 +751,10 @@ void ThrCrypt_DKeyGen(DscThrCrypt *thrcrypt,mpz_ptr prime){
 void ThrCrypt_ENC(DscThrCrypt *thrcrypt,char* plaintext, u_int32_t size){
   thrcrypt->plaintextInput = plaintext;
   encode_bytes_as_mpz(thrcrypt->input, thrcrypt->plaintextInput, size);
+  if((size+1)*8 >= thrcrypt->secparam_bits){
+    printf("\nprime's size is %d bits but plain text is %d bits\n",thrcrypt->secparam_bits,(size+1)*8);
+    exit(1);
+  }
   mpz_t k;
   mpz_init(k); 
   mpz_urandomm(k,thrcrypt->grp.state, thrcrypt->grp.generator);
@@ -836,15 +828,13 @@ void ThrCrypt_Free(DscThrCrypt *thrcrypt) {
 //convert byteArray with the specified size to mpz_t (rop must be initialized)
 void encode_bytes_as_mpz(mpz_ptr rop, char *byteArray, u_int32_t size) {
   char* paddedMessage = malloc(size + 1);
-  paddedMessage[0] = 1; // padding
-  for (int i = 1; i <= size; i++) {
-    paddedMessage[i] = byteArray[i - 1];
-  }
+  paddedMessage[0] = 1; // padding(because mpz_t ignores leading zeros so we add a nonzero byte at the start)
+  memcpy(paddedMessage+1, byteArray, size); //actual message
   mpz_import(rop, size+1, 1, sizeof(char), 0, 0,
               paddedMessage);
   free(paddedMessage);
 }
-//converts back the integer to byteArray, (rop will be allocated in this function)
+//converts back the padded integer to byteArray, (rop will be allocated in this function)
 void decode_mpz_as_byteArray(char** rop, mpz_ptr integer){
   size_t bytes = mpz_size(integer) * sizeof(mp_limb_t);
   char* paddedMessage = malloc(bytes);
