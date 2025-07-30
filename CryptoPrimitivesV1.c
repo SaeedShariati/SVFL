@@ -723,7 +723,8 @@ void Thss_Free(DscThss *thss) {
 //###### ThrCrypt=(DKeyGen,Enc,Dec) (Threshold Elgamal Cryptosystem)
 void ThrCrypt_Enc_Block(DscThrCrypt *thrcrypt,char* plaintext, u_int32_t size, u_int16_t blockNumber);
 void ThrCrypt_Dec_Block(DscThrCrypt *thrcrypt, u_int16_t blockNumber);
-
+u_int16_t decode_mpz_as_byteArray(char* rop, mpz_ptr integer);
+void encode_bytes_as_mpz(mpz_ptr rop, char *byteArray, u_int32_t size);
 
 void ThrCrypt_Config(DscThrCrypt *thrcrypt,u_int16_t secparam_bits,u_int16_t total, u_int16_t threshold) {
 
@@ -733,39 +734,37 @@ void ThrCrypt_Config(DscThrCrypt *thrcrypt,u_int16_t secparam_bits,u_int16_t tot
     mpz_inits(thrcrypt->pkey,thrcrypt->skey,NULL);
 }
 
-void ThrCrypt_DKeyGen(DscThrCrypt *thrcrypt,mpz_ptr prime){
-    if(prime){
-      thrcrypt->grp.secparam = mpz_sizeinbase(thrcrypt->grp.prime, 2);
-      mpz_set(thrcrypt->grp.prime,prime);
-      mpz_set_ui(thrcrypt->grp.generator,2);
-      mpz_sub_ui(thrcrypt->grp.order,thrcrypt->grp.prime,1);
-    }
-    else {
-      GroupGen(&(thrcrypt->grp));
-    }
-    Thss_KeyGen(&(thrcrypt->thss),thrcrypt->grp.prime);
-    Thss_Share(&(thrcrypt->thss),NULL);
+void ThrCrypt_DKeyGen(DscThrCrypt *thrcrypt,DscGrp *grp){
+  if(grp){
+    thrcrypt->grp = *grp;
+  }
+  else {
+    GroupGen(&(thrcrypt->grp));
+  }
+  Thss_KeyGen(&(thrcrypt->thss),thrcrypt->grp.prime);
+  Thss_Share(&(thrcrypt->thss),NULL);
 
-    mpz_set(thrcrypt->skey,thrcrypt->thss.secret);
-    mpz_powm(thrcrypt->pkey, thrcrypt->grp.generator, thrcrypt->skey, thrcrypt->thss.prime);
+  mpz_set(thrcrypt->skey,thrcrypt->thss.secret);
+  mpz_powm(thrcrypt->pkey, thrcrypt->grp.generator, thrcrypt->skey, thrcrypt->thss.prime);
 }
 //plaintext can be any series of bytes, doesn't have to be a string, size is in bytes
 void ThrCrypt_Enc(DscThrCrypt *thrcrypt,char* plaintext, u_int32_t size){
-  thrcrypt->inputSize = size+1; //1 is for the padding
-  thrcrypt->maximumBlockSize = (u_int16_t)(thrcrypt->secparam_bits/8 -1);
-  thrcrypt->blocks = (u_int16_t)((size+thrcrypt->maximumBlockSize-1)/thrcrypt->maximumBlockSize);
+  thrcrypt->maximumBlockSize = (u_int16_t)(thrcrypt->secparam_bits/8 -2);
+  thrcrypt->cipher.blocks=(u_int16_t)((size+thrcrypt->maximumBlockSize-1)/thrcrypt->maximumBlockSize);
   thrcrypt->plaintextInput = plaintext;
-  thrcrypt->plaintextOutput = malloc(size);
-  thrcrypt->output1 = (mpz_t*)malloc(thrcrypt->blocks*sizeof(mpz_t));
-  thrcrypt->output2 = (mpz_t*)malloc(thrcrypt->blocks*sizeof(mpz_t));
-  for(int block =0;block<thrcrypt->blocks-1;block++){
-    mpz_inits(thrcrypt->output1[block],thrcrypt->output2[block],NULL);
+
+  u_int16_t blockCount = thrcrypt->cipher.blocks;
+  thrcrypt->cipher.output1 = (mpz_t*)malloc(blockCount*sizeof(mpz_t));
+  thrcrypt->cipher.output2 = (mpz_t*)malloc(blockCount*sizeof(mpz_t));
+
+  for(int block =0;block<blockCount-1;block++){
+    mpz_inits(thrcrypt->cipher.output1[block],thrcrypt->cipher.output2[block],NULL);
     ThrCrypt_Enc_Block(thrcrypt,plaintext+block*(thrcrypt->maximumBlockSize)
       ,thrcrypt->maximumBlockSize,block);
   }
-  mpz_inits(thrcrypt->output1[thrcrypt->blocks-1],thrcrypt->output2[thrcrypt->blocks-1],NULL);
-  ThrCrypt_Enc_Block(thrcrypt, plaintext+(thrcrypt->blocks-1)*thrcrypt->maximumBlockSize
-    ,size - (thrcrypt->blocks-1)*thrcrypt->maximumBlockSize, thrcrypt->blocks-1);
+  mpz_inits(thrcrypt->cipher.output1[blockCount-1],thrcrypt->cipher.output2[blockCount-1],NULL);
+  ThrCrypt_Enc_Block(thrcrypt, plaintext+(blockCount-1)*thrcrypt->maximumBlockSize
+    ,size - (blockCount-1)*thrcrypt->maximumBlockSize, blockCount-1);
 
 }
 void ThrCrypt_Enc_Block(DscThrCrypt *thrcrypt,char* plaintext, u_int32_t size, u_int16_t blockNumber){
@@ -779,17 +778,18 @@ void ThrCrypt_Enc_Block(DscThrCrypt *thrcrypt,char* plaintext, u_int32_t size, u
   mpz_urandomm(k,thrcrypt->grp.state, thrcrypt->grp.generator);
 
   // c1 = g^k mod p
-  mpz_powm(thrcrypt->output1[blockNumber], thrcrypt->grp.generator,k, thrcrypt->grp.prime);
+  mpz_powm(thrcrypt->cipher.output1[blockNumber], thrcrypt->grp.generator,k, thrcrypt->grp.prime);
 
   // c2 = m * y^k mod p
-  mpz_powm(thrcrypt->output2[blockNumber], thrcrypt->pkey, k, thrcrypt->grp.prime);
-  mpz_mul(thrcrypt->output2[blockNumber], thrcrypt->output2[blockNumber], input);
-  mpz_mod(thrcrypt->output2[blockNumber], thrcrypt->output2[blockNumber], thrcrypt->grp.prime);
+  mpz_powm(thrcrypt->cipher.output2[blockNumber], thrcrypt->pkey, k, thrcrypt->grp.prime);
+  mpz_mul(thrcrypt->cipher.output2[blockNumber], thrcrypt->cipher.output2[blockNumber], input);
+  mpz_mod(thrcrypt->cipher.output2[blockNumber], thrcrypt->cipher.output2[blockNumber], thrcrypt->grp.prime);
   mpz_clear(input);
   mpz_clear(k);
 }
 void ThrCrypt_Dec(DscThrCrypt *thrcrypt)
 {
+  thrcrypt->sizeOfPlaintext = 0;
   mpz_set_ui(thrcrypt->thss.recovered_secret, 0);
   mpz_t term, numerator, denominator, temp;
   mpz_inits(term, numerator, denominator, temp, NULL);
@@ -813,43 +813,47 @@ void ThrCrypt_Dec(DscThrCrypt *thrcrypt)
     }
     mpz_mul(term, term, thrcrypt->thss.shares_y[i]);
     mpz_mod(term,term,thrcrypt->grp.prime);
-    //mpz_mod(thrcrypt->partialDecrypted[i], term, (thrcrypt->grp.prime));
     mpz_add(thrcrypt->thss.recovered_secret, thrcrypt->thss.recovered_secret,
             term);
     mpz_mod(thrcrypt->thss.recovered_secret, thrcrypt->thss.recovered_secret,
             (thrcrypt->grp.prime));
   }
   mpz_clears(term, numerator, denominator, temp, NULL);
+
+  for(int block=0;block<thrcrypt->cipher.blocks;block++){
+    ThrCrypt_Dec_Block(thrcrypt, block);
+  }
+  thrcrypt->plaintextOutput = realloc(thrcrypt->plaintextOutput,thrcrypt->sizeOfPlaintext);
+}
+void ThrCrypt_Dec_Block(DscThrCrypt *thrcrypt, u_int16_t blockNumber)
+{
+  mpz_t s, m;
+  mpz_inits(s,m,NULL);
+  
+  mpz_powm(s, thrcrypt->cipher.output1[blockNumber], thrcrypt->thss.recovered_secret, thrcrypt->grp.prime);
+  mpz_invert(s, s, thrcrypt->grp.prime);
+  mpz_mul(m, thrcrypt->cipher.output2[blockNumber], s);
+  mpz_mod(m, m, thrcrypt->grp.prime);
+  if(blockNumber==0){
+    u_int16_t bytes = mpz_size(m) * sizeof(mp_limb_t);
+    thrcrypt->plaintextOutput = malloc((bytes-1)*thrcrypt->cipher.blocks);
+  }
+  thrcrypt->sizeOfPlaintext += 
+    decode_mpz_as_byteArray(thrcrypt->plaintextOutput + blockNumber*thrcrypt->maximumBlockSize, m);
+  mpz_clears(s,m,NULL);;
+}
+void ThrCrypt_Free(DscThrCrypt *thrcrypt) {
+  for(int i=0;i<thrcrypt->cipher.blocks;i++){
+    mpz_clears(thrcrypt->cipher.output1[i],thrcrypt->cipher.output2[i],NULL);
+  }
   for (int i = 0; i < thrcrypt->thss.threshold; i++) {
     mpz_clear(thrcrypt->thss.shares_x[i]);
     mpz_clear(thrcrypt->thss.shares_y[i]);
   }
   free(thrcrypt->thss.shares_x);
   free(thrcrypt->thss.shares_y);
-
-  for(int block=0;block<thrcrypt->blocks;block++){
-    ThrCrypt_Dec_Block(thrcrypt, block);
-  }
-}
-void ThrCrypt_Dec_Block(DscThrCrypt *thrcrypt, u_int16_t blockNumber)
-{
-    mpz_t s, m;
-    mpz_inits(s,m,NULL);
-    
-    mpz_powm(s, thrcrypt->output1[blockNumber], thrcrypt->thss.recovered_secret, thrcrypt->grp.prime);
-    mpz_invert(s, s, thrcrypt->grp.prime);
-    mpz_mul(m, thrcrypt->output2[blockNumber], s);
-    mpz_mod(m, m, thrcrypt->grp.prime);
-    
-    decode_mpz_as_byteArray(thrcrypt->plaintextOutput + blockNumber*thrcrypt->maximumBlockSize, m);
-    mpz_clears(s,m,NULL);;
-}
-void ThrCrypt_Free(DscThrCrypt *thrcrypt) {
-  for(int i=0;i<thrcrypt->blocks;i++){
-    mpz_clears(thrcrypt->output1[i],thrcrypt->output2[i],NULL);
-  }
-  free(thrcrypt->output1);
-  free(thrcrypt->output2);
+  free(thrcrypt->cipher.output1);
+  free(thrcrypt->cipher.output2);
   free(thrcrypt->plaintextOutput);
   mpz_clears(thrcrypt->skey,thrcrypt->pkey,NULL);
   Thss_Free(&(thrcrypt->thss));
@@ -864,11 +868,12 @@ void encode_bytes_as_mpz(mpz_ptr rop, char *byteArray, u_int32_t size) {
               paddedMessage);
   free(paddedMessage);
 }
-//converts back the padded integer to byteArray
-void decode_mpz_as_byteArray(char* rop, mpz_ptr integer){
+//converts back the padded integer to byteArray(returns bytes read)
+u_int16_t decode_mpz_as_byteArray(char* rop, mpz_ptr integer){
   size_t bytes = mpz_size(integer) * sizeof(mp_limb_t);
   char* paddedMessage = malloc(bytes);
   mpz_export(paddedMessage, &bytes, 1, sizeof(char), 0, 0, integer);
   memcpy(rop, paddedMessage + 1, bytes - 1);
   free(paddedMessage);
+  return bytes-1;
 }

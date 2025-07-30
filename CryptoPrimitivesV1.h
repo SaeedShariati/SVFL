@@ -185,6 +185,11 @@ typedef struct
     mpz_t* coeffs;
 }DscThss;
 
+typedef struct{
+    mpz_t* output1; // output [part1] in format a point on curve
+    mpz_t* output2; // output [part2] in format a point on curve
+    u_int16_t blocks; //number of elements for output1 and output2
+}DscCipher; //ciphertext for ThrCrypt
 
 /*Structure Definition For Threshold Cryptosystem Scheme (Shamir Secret Sharing+Elgamal)*/
 typedef struct {
@@ -192,19 +197,13 @@ typedef struct {
     mpz_t skey; /* secret key */
     mpz_t pkey; //public key
     DscGrp grp;     //Description group
-    //mpz_t input; // input in format a point on curve
-    mpz_t* output1; // output [part1] in format a point on curve
-    mpz_t* output2; // output [part2] in format a point on curve
-    //mpz_t decrypted; // plaintext (after decryption) in format a point on curve
-    //mpz_t *partialDecrypted;//this parameter determines partial decryption done by each party
+    DscCipher cipher;
     char *plaintextInput; // plaintext (befor encryption) in format string
-    u_int32_t inputSize; //size of mpz_t input in bytes
     u_int16_t maximumBlockSize; //maximum size of a block in bytes
-    u_int16_t blocks; //number of blocks, each block will be encrypted individually
     char *plaintextOutput; // plaintext (after decryption) in format string
+    u_int32_t sizeOfPlaintext; //in bytes
     DscThss thss;//Description Threshold Secret Sharing
 } DscThrCrypt;
-
 /*Structure Definition For Key Aggrement Protocol (Between Two parties)*/
 typedef struct
 {
@@ -692,31 +691,51 @@ void Thss_Free(DscThss *thss);
 
 //###### ThrCrypt=(DKeyGen,Enc,Dec) (Shamir Secret Sharing)####################
 void ThrCrypt_Config(DscThrCrypt *thrcrypt,u_int16_t secparam_bits,u_int16_t total, u_int16_t threshold);
-void ThrCrypt_DKeyGen(DscThrCrypt *thrcrypt, mpz_ptr prime);
+void ThrCrypt_DKeyGen(DscThrCrypt *thrcrypt,DscGrp *grp);
 void ThrCrypt_Enc(DscThrCrypt *thrcrypt,char* plaintext, u_int32_t size);
 void ThrCrypt_Dec(DscThrCrypt *thrcrypt);
 void ThrCrypt_Free(DscThrCrypt *thrcrypt);
-
-void encode_bytes_as_mpz(mpz_ptr rop, char *byteArray, u_int32_t size);
-void decode_mpz_as_byteArray(char* rop, mpz_ptr integer);
 /*++++++++++++++ Test Program - DscThrCrypt +++++ 
-    DscThrCrypt thrcrypt;
-    char secret[]= ";dfk;aswk;aswk;asw\0\0\0\0sdfsdfjasof398rj34jff9j9*FEH(*PHJRFEWIPUFH(*WEhfniukjesnhfdkjsdkf394\0";
-    ThrCrypt_Config(&thrcrypt,256,5,3);
-    ThrCrypt_DKeyGen(&thrcrypt,NULL);
-    ThrCrypt_Enc(&thrcrypt,secret,sizeof(secret));
-    ThrCrypt_Dec(&thrcrypt);
-    printf("\n\noutput hex code: \n");
-    for(int i =0;i<sizeof(secret);i++){
-        printf("%02x",(unsigned char)thrcrypt.plaintextOutput[i]);
-    }
-    printf("\n");
-    printf("secret hex code: \n");
-    for(int i =0;i<sizeof(secret);i++){
-        printf("%02x",(unsigned char)secret[i]);
-    }
-    printf("\n");
-    ThrCrypt_Free(&(thrcrypt));
+
+  DscThrCrypt thrcrypt;
+  char secret1[] = ";dfk;aswk;aswk;asw\0\0\0\0sdfsdfjasof398rj34jff9j9*FEH(*"
+                   "PHJRFEWIPUFH(*WEhfniukjesnhfdkjsdkf394\0";
+  char secret2[] = ";dfk;aswk;aswk;asw\0\0*WEhfniukjesnhfdkjsdkf394\0";
+
+  ThrCrypt_Config(&thrcrypt, 256, 5, 3);
+  ThrCrypt_DKeyGen(&thrcrypt, NULL);
+  ThrCrypt_Enc(&thrcrypt, secret1, sizeof(secret1));
+  DscCipher cipher1 = thrcrypt.cipher;
+  ThrCrypt_Enc(&thrcrypt, secret2, sizeof(secret2));
+  DscCipher cipher2 = thrcrypt.cipher;
+
+  thrcrypt.cipher = cipher1;
+  ThrCrypt_Dec(&thrcrypt);
+  printf("\n\ndecrypted output for secret1 hex code: \n");
+  for (int i = 0; i < thrcrypt.sizeOfPlaintext; i++) {
+    printf("%02x", (unsigned char)thrcrypt.plaintextOutput[i]);
+  }
+  printf("\n");
+  printf("secret1 hex code: \n");
+  for (int i = 0; i < sizeof(secret1); i++) {
+    printf("%02x", (unsigned char)secret1[i]);
+  }
+  printf("\n");
+
+  thrcrypt.cipher = cipher2;
+  ThrCrypt_Dec(&thrcrypt);
+  printf("\n\ndecrypted output for secret2 hex code: \n");
+  for (int i = 0; i < thrcrypt.sizeOfPlaintext; i++) {
+    printf("%02x", (unsigned char)thrcrypt.plaintextOutput[i]);
+  }
+  printf("\n");
+  printf("secret2 hex code: \n");
+  for (int i = 0; i < sizeof(secret2); i++) {
+    printf("%02x", (unsigned char)secret2[i]);
+  }
+  printf("\n");
+  ThrCrypt_Free(&(thrcrypt));
+
 +++++++++++++++++++++++++++++++++++++++++++++++++*/
 //#############################################################################
 #endif 
