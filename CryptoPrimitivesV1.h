@@ -192,12 +192,15 @@ typedef struct {
     mpz_t skey; /* secret key */
     mpz_t pkey; //public key
     DscGrp grp;     //Description group
-    mpz_t input; // input in format a point on curve
-    mpz_t output1; // output [part1] in format a point on curve
-    mpz_t output2; // output [part2] in format a point on curve
-    mpz_t decrypted; // plaintext (after decryption) in format a point on curve
-    mpz_t *partialDecrypted;//this parameter determines partial decryption done by each party
+    //mpz_t input; // input in format a point on curve
+    mpz_t* output1; // output [part1] in format a point on curve
+    mpz_t* output2; // output [part2] in format a point on curve
+    //mpz_t decrypted; // plaintext (after decryption) in format a point on curve
+    //mpz_t *partialDecrypted;//this parameter determines partial decryption done by each party
     char *plaintextInput; // plaintext (befor encryption) in format string
+    u_int32_t inputSize; //size of mpz_t input in bytes
+    u_int16_t maximumBlockSize; //maximum size of a block in bytes
+    u_int16_t blocks; //number of blocks, each block will be encrypted individually
     char *plaintextOutput; // plaintext (after decryption) in format string
     DscThss thss;//Description Threshold Secret Sharing
 } DscThrCrypt;
@@ -690,25 +693,29 @@ void Thss_Free(DscThss *thss);
 //###### ThrCrypt=(DKeyGen,Enc,Dec) (Shamir Secret Sharing)####################
 void ThrCrypt_Config(DscThrCrypt *thrcrypt,u_int16_t secparam_bits,u_int16_t total, u_int16_t threshold);
 void ThrCrypt_DKeyGen(DscThrCrypt *thrcrypt, mpz_ptr prime);
-void ThrCrypt_ENC(DscThrCrypt *thrcrypt,char* plaintext, u_int32_t size);
+void ThrCrypt_Enc(DscThrCrypt *thrcrypt,char* plaintext, u_int32_t size);
 void ThrCrypt_Dec(DscThrCrypt *thrcrypt);
 void ThrCrypt_Free(DscThrCrypt *thrcrypt);
+
 void encode_bytes_as_mpz(mpz_ptr rop, char *byteArray, u_int32_t size);
-void decode_mpz_as_byteArray(char** rop, mpz_ptr integer);
+void decode_mpz_as_byteArray(char* rop, mpz_ptr integer);
 /*++++++++++++++ Test Program - DscThrCrypt +++++ 
     DscThrCrypt thrcrypt;
-    char secret[]= "eiojwledewkf394\0";
-    ThrCrypt_Config(&thrcrypt,512,5,3);
+    char secret[]= ";dfk;aswk;aswk;asw\0\0\0\0sdfsdfjasof398rj34jff9j9*FEH(*PHJRFEWIPUFH(*WEhfniukjesnhfdkjsdkf394\0";
+    ThrCrypt_Config(&thrcrypt,256,5,3);
     ThrCrypt_DKeyGen(&thrcrypt,NULL);
-    ThrCrypt_ENC(&thrcrypt,secret,sizeof(secret));
+    ThrCrypt_Enc(&thrcrypt,secret,sizeof(secret));
     ThrCrypt_Dec(&thrcrypt);
-    printf("\nPlaintextInput:\n %s\n",secret);
-
-    printf("\nPlaintextOutput:\n %s\n",thrcrypt.plaintextOutput);
-    for(int i =0;i<3;i++){
-        printf("partial decryption[%d] :",i);
-        gmp_printf(" %Zx\n",thrcrypt.partialDecrypted[i]);
+    printf("\n\noutput hex code: \n");
+    for(int i =0;i<sizeof(secret);i++){
+        printf("%02x",(unsigned char)thrcrypt.plaintextOutput[i]);
     }
+    printf("\n");
+    printf("secret hex code: \n");
+    for(int i =0;i<sizeof(secret);i++){
+        printf("%02x",(unsigned char)secret[i]);
+    }
+    printf("\n");
     ThrCrypt_Free(&(thrcrypt));
 +++++++++++++++++++++++++++++++++++++++++++++++++*/
 //#############################################################################
