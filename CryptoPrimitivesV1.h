@@ -695,6 +695,7 @@ void ThrCrypt_DKeyGen(DscThrCrypt *thrcrypt,DscGrp *grp);
 void ThrCrypt_Enc(DscThrCrypt *thrcrypt,char* plaintext, u_int32_t size);
 void ThrCrypt_Dec(DscThrCrypt *thrcrypt);
 void ThrCrypt_Free(DscThrCrypt *thrcrypt);
+void Cipher_Free(DscCipher* cipher);
 /*++++++++++++++ Test Program - DscThrCrypt +++++ 
 
   DscThrCrypt thrcrypt;

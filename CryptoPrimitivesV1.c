@@ -99,6 +99,7 @@ void PRF_Free(DscPRF *prf) {
 }
 
 // ############ PRG=(SeedGen,Eval) ############
+//secparam here is in  bytes
 void PRG_Config(DscPRG *prg, int secparam, u_int32_t size) {
   prg->secparam = secparam;
   prg->size = size;
@@ -843,21 +844,23 @@ void ThrCrypt_Dec_Block(DscThrCrypt *thrcrypt, u_int16_t blockNumber)
   mpz_clears(s,m,NULL);;
 }
 void ThrCrypt_Free(DscThrCrypt *thrcrypt) {
-  for(int i=0;i<thrcrypt->cipher.blocks;i++){
-    mpz_clears(thrcrypt->cipher.output1[i],thrcrypt->cipher.output2[i],NULL);
-  }
   for (int i = 0; i < thrcrypt->thss.threshold; i++) {
     mpz_clear(thrcrypt->thss.shares_x[i]);
     mpz_clear(thrcrypt->thss.shares_y[i]);
   }
   free(thrcrypt->thss.shares_x);
   free(thrcrypt->thss.shares_y);
-  free(thrcrypt->cipher.output1);
-  free(thrcrypt->cipher.output2);
   free(thrcrypt->plaintextOutput);
   mpz_clears(thrcrypt->skey,thrcrypt->pkey,NULL);
   Thss_Free(&(thrcrypt->thss));
   GroupGen_Free(&(thrcrypt->grp));
+}
+void Cipher_Free(DscCipher* cipher){
+  for(int i=0;i<cipher->blocks;i++){
+    mpz_clears(cipher->output1[i],cipher->output2[i],NULL);
+  }
+  free(cipher->output1);
+  free(cipher->output2);
 }
 //convert byteArray with the specified size to mpz_t (rop must be initialized)
 void encode_bytes_as_mpz(mpz_ptr rop, char *byteArray, u_int32_t size) {
