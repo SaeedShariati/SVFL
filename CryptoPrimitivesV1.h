@@ -691,7 +691,7 @@ void Thss_Free(DscThss *thss);
 
 //###### ThrCrypt=(DKeyGen,Enc,Dec) (Shamir Secret Sharing)####################
 void ThrCrypt_Config(DscThrCrypt *thrcrypt,u_int16_t secparam_bits,u_int16_t total, u_int16_t threshold);
-void ThrCrypt_DKeyGen(DscThrCrypt *thrcrypt,DscGrp *grp);
+void ThrCrypt_DKeyGen(DscThrCrypt *thrcrypt);
 void ThrCrypt_Enc(DscThrCrypt *thrcrypt,char* plaintext, u_int32_t size);
 void ThrCrypt_Dec(DscThrCrypt *thrcrypt);
 void ThrCrypt_Free(DscThrCrypt *thrcrypt);

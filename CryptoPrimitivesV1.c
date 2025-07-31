@@ -107,7 +107,7 @@ void PRG_Config(DscPRG *prg, int secparam, u_int32_t size) {
 void PRG_SeedGen(DscPRG *prg) {
   (&(prg->hmac))->secparam = prg->secparam;
   (&(prg->hmac))->plaintextInput =
-      malloc(strlen("An inital value          ") + 1);
+  malloc(strlen("An inital value          ") + 1);
   strcpy((&(prg->hmac))->plaintextInput, "An inital value          ");
   (&(prg->hmac))->DigestOutput = malloc(32);
   (&(prg->hmac))->key = malloc((&(prg->hmac))->secparam);
@@ -730,18 +730,14 @@ void encode_bytes_as_mpz(mpz_ptr rop, char *byteArray, u_int32_t size);
 void ThrCrypt_Config(DscThrCrypt *thrcrypt,u_int16_t secparam_bits,u_int16_t total, u_int16_t threshold) {
 
     thrcrypt->secparam_bits=secparam_bits;
+    thrcrypt->maximumBlockSize = (u_int16_t)(thrcrypt->secparam_bits/8 -2);
     Thss_Config(&(thrcrypt->thss),secparam_bits,total,threshold);
     GroupGen_Config(&(thrcrypt->grp),secparam_bits);
     mpz_inits(thrcrypt->pkey,thrcrypt->skey,NULL);
 }
 
-void ThrCrypt_DKeyGen(DscThrCrypt *thrcrypt,DscGrp *grp){
-  if(grp){
-    thrcrypt->grp = *grp;
-  }
-  else {
-    GroupGen(&(thrcrypt->grp));
-  }
+void ThrCrypt_DKeyGen(DscThrCrypt *thrcrypt){
+  GroupGen(&(thrcrypt->grp));
   Thss_KeyGen(&(thrcrypt->thss),thrcrypt->grp.prime);
   Thss_Share(&(thrcrypt->thss),NULL);
 
@@ -750,9 +746,9 @@ void ThrCrypt_DKeyGen(DscThrCrypt *thrcrypt,DscGrp *grp){
 }
 //plaintext can be any series of bytes, doesn't have to be a string, size is in bytes
 void ThrCrypt_Enc(DscThrCrypt *thrcrypt,char* plaintext, u_int32_t size){
-  thrcrypt->maximumBlockSize = (u_int16_t)(thrcrypt->secparam_bits/8 -2);
   thrcrypt->cipher.blocks=(u_int16_t)((size+thrcrypt->maximumBlockSize-1)/thrcrypt->maximumBlockSize);
-  thrcrypt->plaintextInput = plaintext;
+  thrcrypt->plaintextInput = malloc(size);
+  memcpy(thrcrypt->plaintextInput,plaintext,size);
 
   u_int16_t blockCount = thrcrypt->cipher.blocks;
   thrcrypt->cipher.output1 = (mpz_t*)malloc(blockCount*sizeof(mpz_t));
@@ -767,12 +763,13 @@ void ThrCrypt_Enc(DscThrCrypt *thrcrypt,char* plaintext, u_int32_t size){
   ThrCrypt_Enc_Block(thrcrypt, plaintext+(blockCount-1)*thrcrypt->maximumBlockSize
     ,size - (blockCount-1)*thrcrypt->maximumBlockSize, blockCount-1);
 
+  free(thrcrypt->plaintextInput);
+
 }
 void ThrCrypt_Enc_Block(DscThrCrypt *thrcrypt,char* plaintext, u_int32_t size, u_int16_t blockNumber){
-  thrcrypt->plaintextInput = plaintext;
   mpz_t input;
   mpz_init(input);
-  encode_bytes_as_mpz(input, thrcrypt->plaintextInput, size);
+  encode_bytes_as_mpz(input, plaintext, size);
 
   mpz_t k;
   mpz_init(k); 
@@ -873,7 +870,9 @@ void encode_bytes_as_mpz(mpz_ptr rop, char *byteArray, u_int32_t size) {
 }
 //converts back the padded integer to byteArray(returns bytes read)
 u_int16_t decode_mpz_as_byteArray(char* rop, mpz_ptr integer){
-  size_t bytes = mpz_size(integer) * sizeof(mp_limb_t);
+  //size_t bytes = mpz_size(integer) * sizeof(mp_limb_t);
+  size_t bytes = (mpz_sizeinbase(integer, 2) + 7) / 8;
+
   char* paddedMessage = malloc(bytes);
   mpz_export(paddedMessage, &bytes, 1, sizeof(char), 0, 0, integer);
   memcpy(rop, paddedMessage + 1, bytes - 1);
