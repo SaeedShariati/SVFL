@@ -739,4 +739,5 @@ void Cipher_Free(DscCipher* cipher);
 
 +++++++++++++++++++++++++++++++++++++++++++++++++*/
 //#############################################################################
+void generatePrime(mpz_ptr rop, u_int32_t sizeInBits);
 #endif 

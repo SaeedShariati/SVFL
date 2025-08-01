@@ -68,6 +68,8 @@ void HMAC_Free(DscHMAC *hmac) {
 // ############################################
 
 // ############ PRF=(KeyGen,Eval) #############
+
+//secparam in bytes
 void PRF_Config(DscPRF *prf, int secparam) {
   prf->secparam = secparam;
   prf->randomOutput = malloc(32);
@@ -234,6 +236,16 @@ void GroupGen(DscGrp *grp) {
 void GroupGen_Free(DscGrp* grp){
   mpz_clears(grp->prime,grp->generator,grp->order,NULL);
   gmp_randclear(grp->state);
+}
+
+void generatePrime(mpz_ptr rop, u_int32_t sizeInBits){
+  gmp_randstate_t state;
+  gmp_randinit_default(state);
+  gmp_randseed_ui(state, time(NULL));
+
+  mpz_urandomb(rop, state, sizeInBits);
+  mpz_nextprime(rop, rop);
+  gmp_randclear(state);
 }
 // ############ BGroupGen  ############
 void BGroupGen_Config(DscBGrp *bgrp) {
