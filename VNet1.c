@@ -21,13 +21,11 @@ gcc VNet.c VNet.c -o VNet -I ~/.local/include/pbc -L ~/.local/lib -Wl,-rpath ~/.
    -lgmp -l tomcrypt -l m
 
 *********************************************************************************************************************************************/
-#define GRAD_SIZE 20
+#define GRAD_SIZE 10
 #define USERS_SIZE 1000
 #define SEC_PARAM 32  //in bytes
 #define Threshold 10
-#define PrimeBits 512 //used for masking (if the number of users is large, value of globalGradient might exceed this value 
-                       //which will make the result invalid, because the result is mod p.
-
+#define DropOut 0.1 //what rate of users dropout at every step
 typedef struct {
    int Uid; // Unique ID for the user
 
@@ -36,7 +34,7 @@ typedef struct {
    mpz_t shares_x;      // id related to thss
    mpz_t shares_y;      // secret share related to thss
 
-   u_int32_t *plainLocalVector;
+   unsigned long *plainLocalVector;
 
    mpz_t *maskedLocalVector;
    mpz_t *maskTag;
@@ -56,7 +54,7 @@ typedef struct {
 
    // for using in tag
    mpz_t k_p;
-   u_int32_t *k_s_i;
+   unsigned long *k_s_i;
 
 } DscClient;
 
@@ -65,8 +63,6 @@ typedef struct {
    // DscPRG prg;
    DscGrp grp;
    DscPRF prf;
-   mpz_t prime; //only used for masking 33 bit (1 bit bigger than the gradients)
-
 
    DscThrCrypt thrcrypt;
 
@@ -78,7 +74,7 @@ typedef struct {
 
    u_int16_t *Uact1, *Uact2, *Uact3;
 
-   u_int32_t *gradGlobalVector;
+   unsigned long *gradGlobalVector;
    mpz_t *tagGlobalVector;
 
    DscClient *Users; // Array of users (clients)
@@ -164,10 +160,8 @@ void VNET_Config(DscVNet *vnet)
    vnet->Uact2 = calloc(vnet->numClients , sizeof(u_int16_t));
    vnet->Uact3 = calloc(vnet->numClients , sizeof(u_int16_t));
 
-   vnet->gradGlobalVector = malloc(vnet->grdSize * sizeof(int32_t));
+   vnet->gradGlobalVector = malloc(vnet->grdSize * sizeof(unsigned long));
    vnet->tagGlobalVector = malloc(vnet->grdSize * sizeof(mpz_t));
-   mpz_init(vnet->prime);
-   generatePrime(vnet->prime,sizeof(uint32_t)+1);
    // To initialize PRF for server
    PRF_Config(&(vnet->prf), vnet->secparam);
    PRF_KeyGen(&(vnet->prf));
@@ -192,13 +186,13 @@ void VNET_Config(DscVNet *vnet)
 
       // To initialize local data vector for each user
       srand(time(NULL));
-      vnet->Users[i].plainLocalVector = calloc(vnet->grdSize, sizeof(int32_t));
+      vnet->Users[i].plainLocalVector = calloc(vnet->grdSize, sizeof(unsigned long));
       vnet->Users[i].maskedLocalVector = malloc(vnet->grdSize * sizeof(mpz_t));
       vnet->Users[i].maskTag = malloc(vnet->grdSize* sizeof(mpz_t));
 
       for (int j = 0; j < vnet->grdSize; j++) {
          //vnet->Users[i].plainLocalVector[j] = i;
-         vnet->Users[i].plainLocalVector[j]=(uint32_t)(rand()%32768);
+         vnet->Users[i].plainLocalVector[j]=(unsigned long)(rand()%32768);
          mpz_inits(vnet->Users[i].maskedLocalVector[j],vnet->Users[i].maskTag[j],NULL);
       }
 
@@ -210,7 +204,7 @@ void VNET_Config(DscVNet *vnet)
       vnet->Users[i].sverify = calloc((vnet->numClients) , sizeof(char*));
 
       mpz_init(vnet->Users[i].k_p);
-      vnet->Users[i].k_s_i = malloc(sizeof(int32_t)*vnet->grdSize);
+      vnet->Users[i].k_s_i = malloc(sizeof(unsigned long)*vnet->grdSize);
    }
 }
 
@@ -297,21 +291,6 @@ void VNET_KeyShare(DscVNet *vnet, int i)
    vnet->Users[i].P = vnet->thrcrypt.cipher;   
    free(P);
 }
-
-// Convert Prg bytes to int numbers
-void bytes_to_ints(unsigned char *byteArray, uint32_t *intArray, int size)
-{
-   for (int i = 0; i < size; i++) {
-      int index = i * 4; // Each int is 4 bytes
-
-      // Convert from Big-Endian to system's Endian format
-      intArray[i] = ((uint32_t)byteArray[index] << 24) | 
-      ((uint32_t)byteArray[index + 1] << 16) |
-                    ((uint32_t)byteArray[index + 2] << 8)
-                     | ((uint32_t)byteArray[index + 3]);
-   }
-}
-
 void VNET_Mask(DscVNet *vnet, u_int16_t i, DscPRG *prg)
 {
    uint32_t Uact1Active = 0;
@@ -323,10 +302,10 @@ void VNET_Mask(DscVNet *vnet, u_int16_t i, DscPRG *prg)
       exit(1);
    }
 
-   uint32_t *prgArray = malloc(vnet->grdSize * sizeof(uint32_t));
+   unsigned long *prgArray = malloc(vnet->grdSize * sizeof(unsigned long));
    mpz_t *Sum_prgArray = malloc(vnet->grdSize * sizeof(mpz_t));
 
-   uint32_t *prgArrayTag = malloc(vnet->grdSize * sizeof(uint32_t));
+   unsigned long *prgArrayTag = malloc(vnet->grdSize * sizeof(unsigned long));
    mpz_t *Sum_prgArrayTag = malloc(vnet->grdSize * sizeof(mpz_t));
 
    for(int k=0;k<vnet->grdSize;k++){
@@ -440,7 +419,7 @@ void VNET_Mask(DscVNet *vnet, u_int16_t i, DscPRG *prg)
       mpz_add_ui(vnet->Users[i].maskTag[j],vnet->Users[i].maskTag[j],vnet->Users[i].k_s_i[j]);
       mpz_mod(vnet->Users[i].maskTag[j],vnet->Users[i].maskTag[j],vnet->grp.prime);
 
-      mpz_addmul_ui(vnet->Users[i].maskTag[j],vnet->Users[i].k_p,((uint32_t *)(vnet->Users[i].plainLocalVector))[j]);
+      mpz_addmul_ui(vnet->Users[i].maskTag[j],vnet->Users[i].k_p,vnet->Users[i].plainLocalVector[j]);
       mpz_mod(vnet->Users[i].maskTag[j],vnet->Users[i].maskTag[j],vnet->grp.prime);    
    }
 
@@ -519,10 +498,10 @@ void VNET_UNMask(DscVNet *vnet, DscPRG *prg)
      vnet->Users[i].P.blocks = 0;
    }
 
-   uint32_t *prgArray = malloc(vnet->grdSize * sizeof(uint32_t));
+   unsigned long *prgArray = malloc(vnet->grdSize * sizeof(unsigned long));
    mpz_t *Sum_prgArray = malloc(vnet->grdSize * sizeof(mpz_t));
 
-   uint32_t *prgArrayTag = malloc(vnet->grdSize * sizeof(uint32_t));
+   unsigned long *prgArrayTag = malloc(vnet->grdSize * sizeof(unsigned long));
 
    for(int k=0;k<vnet->grdSize;k++){
       mpz_init(vnet->tagGlobalVector[k]);
@@ -606,7 +585,7 @@ void VNET_UNMask(DscVNet *vnet, DscPRG *prg)
    }
 
    for(int j=0;j<vnet->grdSize;j++){
-      vnet->gradGlobalVector[j] = (u_int32_t)mpz_get_ui(Sum_prgArray[j]);
+      vnet->gradGlobalVector[j] = mpz_get_ui(Sum_prgArray[j]);
       mpz_clear(Sum_prgArray[j]);
    }
    free(prgArray);
@@ -646,14 +625,14 @@ void VNET_Vrfy(DscVNet *vnet,DscPRG* prg)
    byteArray_to_mpz(k_p, (char*)prg->randomOutput, prg->size);
    mpz_mod(k_p,k_p,vnet->grp.prime);
 
-   uint32_t** k_s_i = (uint32_t**) malloc(vnet->numClients*sizeof(uint32_t*));
+   unsigned long** k_s_i = (unsigned long**) malloc(vnet->numClients*sizeof(unsigned long*));
 
    for(u_int16_t user=0;user<vnet->numClients;user++){
       if(vnet->Uact1[user]==0)
          continue;
       str1[4] = (user>>8)&0xFF;
       str1[5] = user & 0xFF;
-      k_s_i[user] = (uint32_t*)malloc(vnet->grdSize*sizeof(uint32_t));
+      k_s_i[user] = (unsigned long*)malloc(vnet->grdSize*sizeof(unsigned long));
       memset(prg->hmac.key,0,vnet->secparam); //for any letover bytes of key to be zero
       PRF_Eval(&(vnet->prf),(char*)str1,6);
       memcpy((char*)(prg->hmac.key),vnet->prf.randomOutput, MIN(32,vnet->secparam));
@@ -722,14 +701,14 @@ int main()
 
   DscTimeMeasure timemeasure;
 
-  uint32_t size = GRAD_SIZE * 4;
+  uint32_t size = GRAD_SIZE * sizeof(unsigned long);
 
   DscPRG prg2;
   PRG_Config(&prg2, SEC_PARAM, size);
   PRG_SeedGen(&prg2);
 
+  printf("\n** Dropout = %f, n = %d **\n",(float)DropOut,USERS_SIZE);
   DscVNet vnet;
-   printf("size of usigned long: %lu\n",sizeof(unsigned long));
   clock_gettime(CLOCK_MONOTONIC, (&(timemeasure.start)));
   VNET_Config(&vnet);
   clock_gettime(CLOCK_MONOTONIC, (&(timemeasure.end)));
@@ -743,12 +722,12 @@ int main()
   VNET_Init(&vnet);
   clock_gettime(CLOCK_MONOTONIC, (&(timemeasure.end)));
   Time_Measure(&timemeasure);
-  printf("\nElapsed Time for Init is as below:\n");
+  printf("Elapsed Time for Init is as below:\n");
   printf("In Seconds: %ld\n", timemeasure.seconds);
   printf("In Milliseconds: %ld\n", timemeasure.milliseconds);
   printf("In Microseconds: %ld\n", timemeasure.microseconds);
 
-  double percentage = 0.8;
+  double percentage = 1-DropOut;
   size_t count = (size_t)(vnet.numClients * percentage);
   size_t selected; 
   for (int i = 0; i < count; i++) {
@@ -767,14 +746,14 @@ int main()
   }
   clock_gettime(CLOCK_MONOTONIC, (&(timemeasure.end)));
   Time_Measure(&timemeasure);
-  printf("\nElapsed Time for key is as below:\n");
+  printf("Elapsed Time for key is as below:\n");
   printf("In Seconds: %ld\n", timemeasure.seconds);
   printf("In Milliseconds: %ld\n", timemeasure.milliseconds);
   printf("In Microseconds: %ld\n", timemeasure.microseconds);
 
   // Step 2: Set 10% of indices in Uact2 to 0 based on Uact1
 
-  randomly_zero_out(vnet.Uact2, vnet.Uact1, vnet.numClients, 0.2);
+  randomly_zero_out(vnet.Uact2, vnet.Uact1, vnet.numClients, DropOut);
   clock_gettime(CLOCK_MONOTONIC, (&(timemeasure.start)));
   for (int i = 0; i < vnet.numClients; i++) {
     if (vnet.Uact2[i] == 0)
@@ -784,7 +763,7 @@ int main()
   PRG_Free(&prg2);
   clock_gettime(CLOCK_MONOTONIC, (&(timemeasure.end)));
   Time_Measure(&timemeasure);
-  printf("\nElapsed Time for Mask Function is as below:\n");
+  printf("Elapsed Time for Mask Function is as below:\n");
   printf("In Seconds: %ld\n", timemeasure.seconds);
   printf("In Milliseconds: %ld\n", timemeasure.milliseconds);
   printf("In Microseconds: %ld\n", timemeasure.microseconds);
@@ -796,12 +775,12 @@ int main()
   DscPRG prg;
   PRG_Config(&prg, SEC_PARAM, size);
   PRG_SeedGen(&prg);
-  randomly_zero_out(vnet.Uact3, vnet.Uact2, vnet.numClients, 0.2);
+  randomly_zero_out(vnet.Uact3, vnet.Uact2, vnet.numClients, DropOut);
   VNET_UNMask(&vnet, &prg);
   PRG_Free(&prg);
   clock_gettime(CLOCK_MONOTONIC, (&(timemeasure.end)));
   Time_Measure(&timemeasure);
-  printf("\nElapsed Time for UNmask Function is as below:\n");
+  printf("Elapsed Time for UNmask Function is as below:\n");
   printf("In Seconds: %ld\n", timemeasure.seconds);
   printf("In Milliseconds: %ld\n", timemeasure.milliseconds);
   printf("In Microseconds: %ld\n", timemeasure.microseconds);
@@ -815,7 +794,7 @@ int main()
   PRG_Free(&(prg3));
   clock_gettime(CLOCK_MONOTONIC, (&(timemeasure.end)));
   Time_Measure(&timemeasure);
-  printf("\nElapsed Time for Verify Function is as below:\n");
+  printf("Elapsed Time for Verify Function is as below:\n");
   printf("In Seconds: %ld\n", timemeasure.seconds);
   printf("In Milliseconds: %ld\n", timemeasure.milliseconds);
   printf("In Microseconds: %ld\n", timemeasure.microseconds);
