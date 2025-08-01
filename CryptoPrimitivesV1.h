@@ -128,7 +128,7 @@ typedef struct {
     int secparam; /*security parameter*/
     unsigned char *randomOutput; // extended random value
     //unsigned long output_len;
-    u_int32_t size; //size of randomOutput in bytes
+    uint32_t size; //size of randomOutput in bytes
     DscHMAC hmac; // seed relatoed to prg is key of HMAC
 } DscPRG;
 /*===========================================================================================*/
@@ -188,7 +188,7 @@ typedef struct
 typedef struct{
     mpz_t* output1; // output [part1] in format a point on curve
     mpz_t* output2; // output [part2] in format a point on curve
-    u_int32_t blocks; //number of elements for output1 and output2
+    uint32_t blocks; //number of elements for output1 and output2
 }DscCipher; //ciphertext for ThrCrypt
 
 /*Structure Definition For Threshold Cryptosystem Scheme (Shamir Secret Sharing+Elgamal)*/
@@ -199,9 +199,9 @@ typedef struct {
     DscGrp grp;     //Description group
     DscCipher cipher;
     char *plaintextInput; // plaintext (befor encryption) in format string
-    u_int16_t maximumBlockSize; //maximum size of a block in bytes
+    uint16_t maximumBlockSize; //maximum size of a block in bytes
     char *plaintextOutput; // plaintext (after decryption) in format string
-    u_int32_t sizeOfPlaintext; //in bytes
+    uint32_t sizeOfPlaintext; //in bytes
     DscThss thss;//Description Threshold Secret Sharing
 } DscThrCrypt;
 /*Structure Definition For Key Aggrement Protocol (Between Two parties)*/
@@ -360,7 +360,7 @@ void HMAC_Free(DscHMAC *hmac);
 //############ PRF=(KeyGen,Eval) ##############################################
 void PRF_Config(DscPRF *prf,int secparam);
 void PRF_KeyGen(DscPRF *prf);
-void PRF_Eval(DscPRF *prf,char* message,u_int32_t size);
+void PRF_Eval(DscPRF *prf,char* message,uint32_t size);
 void PRF_Free(DscPRF *prf);
 /*++++++++++ Test Program - PRF +++++++++++++++++ 
     DscPRF prf;
@@ -386,7 +386,7 @@ void PRF_Free(DscPRF *prf);
 
 
 //############ PRG=(SeedGen,Eval) #############################################
-void PRG_Config(DscPRG *prg, int secparam, u_int32_t size);
+void PRG_Config(DscPRG *prg, int secparam, uint32_t size);
 void PRG_SeedGen(DscPRG *prg);
 void PRG_Eval(DscPRG *prg);
 void PRG_Free(DscPRG *prg);
@@ -422,7 +422,7 @@ void PRG_Free(DscPRG *prg);
 
 //############ Hash=(Eval) ####################################################
 void Hash_Config(DscHash *hash,int secparam);
-void Hash_Eval(DscHash *hash,char* plaintext,u_int32_t size);
+void Hash_Eval(DscHash *hash,char* plaintext,uint32_t size);
 void Hash_Free(DscHash* hash);
 /*++++++++++ Test Program - Hash ++++++++++++++++ 
     DscHash hash;
@@ -441,7 +441,7 @@ void Hash_Free(DscHash* hash);
 
 
 //############ GroupGen (GMP) ##################################################
-void GroupGen_Config(DscGrp *grp, u_int32_t secparam);
+void GroupGen_Config(DscGrp *grp, uint32_t secparam);
 void GroupGen(DscGrp *grp);
 void GroupGen_Free(DscGrp *grp);
 /*++++++++++ Test Program - GroupGen +++++++++++ 
@@ -690,9 +690,9 @@ void Thss_Free(DscThss *thss);
 
 
 //###### ThrCrypt=(DKeyGen,Enc,Dec) (Shamir Secret Sharing)####################
-void ThrCrypt_Config(DscThrCrypt *thrcrypt,u_int16_t secparam_bits,u_int16_t total, u_int16_t threshold);
+void ThrCrypt_Config(DscThrCrypt *thrcrypt,uint16_t secparam_bits,uint16_t total, uint16_t threshold);
 void ThrCrypt_DKeyGen(DscThrCrypt *thrcrypt);
-void ThrCrypt_Enc(DscThrCrypt *thrcrypt,char* plaintext, u_int32_t size);
+void ThrCrypt_Enc(DscThrCrypt *thrcrypt,char* plaintext, uint32_t size);
 void ThrCrypt_Dec(DscThrCrypt *thrcrypt);
 void ThrCrypt_Free(DscThrCrypt *thrcrypt);
 void Cipher_Free(DscCipher* cipher);
@@ -739,5 +739,5 @@ void Cipher_Free(DscCipher* cipher);
 
 +++++++++++++++++++++++++++++++++++++++++++++++++*/
 //#############################################################################
-void generatePrime(mpz_ptr rop, u_int32_t sizeInBits);
+void generatePrime(mpz_ptr rop, uint32_t sizeInBits);
 #endif 
