@@ -758,11 +758,11 @@ void ThrCrypt_DKeyGen(DscThrCrypt *thrcrypt){
 }
 //plaintext can be any series of bytes, doesn't have to be a string, size is in bytes
 void ThrCrypt_Enc(DscThrCrypt *thrcrypt,char* plaintext, u_int32_t size){
-  thrcrypt->cipher.blocks=(u_int16_t)((size+thrcrypt->maximumBlockSize-1)/thrcrypt->maximumBlockSize);
+  thrcrypt->cipher.blocks=(u_int32_t)((size+thrcrypt->maximumBlockSize-1)/thrcrypt->maximumBlockSize);
   thrcrypt->plaintextInput = malloc(size);
   memcpy(thrcrypt->plaintextInput,plaintext,size);
 
-  u_int16_t blockCount = thrcrypt->cipher.blocks;
+  u_int32_t blockCount = thrcrypt->cipher.blocks;
   thrcrypt->cipher.output1 = (mpz_t*)malloc(blockCount*sizeof(mpz_t));
   thrcrypt->cipher.output2 = (mpz_t*)malloc(blockCount*sizeof(mpz_t));
 

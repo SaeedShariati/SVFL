@@ -188,7 +188,7 @@ typedef struct
 typedef struct{
     mpz_t* output1; // output [part1] in format a point on curve
     mpz_t* output2; // output [part2] in format a point on curve
-    u_int16_t blocks; //number of elements for output1 and output2
+    u_int32_t blocks; //number of elements for output1 and output2
 }DscCipher; //ciphertext for ThrCrypt
 
 /*Structure Definition For Threshold Cryptosystem Scheme (Shamir Secret Sharing+Elgamal)*/

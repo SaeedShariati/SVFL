@@ -21,7 +21,7 @@ gcc VNet.c VNet.c -o VNet -I ~/.local/include/pbc -L ~/.local/lib -Wl,-rpath ~/.
    -lgmp -l tomcrypt -l m
 
 *********************************************************************************************************************************************/
-#define GRAD_SIZE 100
+#define GRAD_SIZE 20
 #define USERS_SIZE 1000
 #define SEC_PARAM 32  //in bytes
 #define Threshold 10
@@ -114,6 +114,12 @@ void printmpz(mpz_t a,char* name){
    gmp_printf("%Zx",a);
    printf("\n**********************\n");
 }
+//not secure, used to give random inputs for local gra
+uint64_t rand_uint64() {
+    static uint64_t state = 88172645463325252ull; // seed
+    state = state * 6364136223846793005ULL + 1;
+    return state;
+}
 
 //turns mpz_t into an array of bytes and returns the number of bytes
 u_int32_t mpz_to_byteArray(char** rop, mpz_ptr integer){
@@ -191,7 +197,8 @@ void VNET_Config(DscVNet *vnet)
       vnet->Users[i].maskTag = malloc(vnet->grdSize* sizeof(mpz_t));
 
       for (int j = 0; j < vnet->grdSize; j++) {
-         vnet->Users[i].plainLocalVector[j] = i;
+         //vnet->Users[i].plainLocalVector[j] = i;
+         vnet->Users[i].plainLocalVector[j]=(uint32_t)(rand()%32768);
          mpz_inits(vnet->Users[i].maskedLocalVector[j],vnet->Users[i].maskTag[j],NULL);
       }
 
@@ -278,7 +285,7 @@ void VNET_KeyShare(DscVNet *vnet, int i)
    ThrCrypt_Enc(&(vnet->thrcrypt),B,size1+size2);
    vnet->Users[i].B = vnet->thrcrypt.cipher;
    free(betaMasked);free(betaVerify);free(B);
-
+   printf(",B%d encrypted,",i);
 
 
    char* P = malloc(2*(vnet->numClients)*8);
@@ -290,7 +297,7 @@ void VNET_KeyShare(DscVNet *vnet, int i)
       ,vnet->Users[i].sverify[j],8);
    }
    ThrCrypt_Enc(&(vnet->thrcrypt), P, 2*(vnet->numClients)*8);
-   vnet->Users[i].P = vnet->thrcrypt.cipher;
+   vnet->Users[i].P = vnet->thrcrypt.cipher;   
    free(P);
 }
 
@@ -464,7 +471,7 @@ void VNET_UNMask(DscVNet *vnet, DscPRG *prg)
       if(vnet->Uact3[j]==0)
          continue;
        //server gets the Uact3's sharess
-      mpz_inits(vnet->thrcrypt.thss.shares_x[t],vnet->thrcrypt.thss.shares_y[j],NULL);
+      mpz_inits(vnet->thrcrypt.thss.shares_x[t],vnet->thrcrypt.thss.shares_y[t],NULL);
       mpz_set(vnet->thrcrypt.thss.shares_x[t] , vnet->Users[j].shares_x);
       mpz_set(vnet->thrcrypt.thss.shares_y[t] , vnet->Users[j].shares_y);
       t+=1;
@@ -475,7 +482,6 @@ void VNET_UNMask(DscVNet *vnet, DscPRG *prg)
       }
      // Decrypts B_i for Uact2 that have gone offline
      vnet->thrcrypt.cipher = vnet->Users[i].B;
-     
      ThrCrypt_Dec(&(vnet->thrcrypt));
      char* betaMasked = malloc(vnet->Users[i].betaMaskedSize);
      char* betaVerify = malloc(vnet->Users[i].betaVerifySize);
@@ -658,7 +664,7 @@ void VNET_Vrfy(DscVNet *vnet,DscPRG* prg)
       memcpy(k_s_i[user], prg->randomOutput, prg->size);    
    }
 
-   mpz_t *tagPrime = malloc(vnet->grdSize * sizeof(mpz_t*));
+   mpz_t *tagPrime = malloc(vnet->grdSize * sizeof(mpz_t));
 
    for(int j =0;j<vnet->grdSize;j++){
       mpz_init(tagPrime[j]);
@@ -769,7 +775,7 @@ int main()
 
   // Step 2: Set 10% of indices in Uact2 to 0 based on Uact1
 
-  randomly_zero_out(vnet.Uact2, vnet.Uact1, vnet.numClients, 0.1);
+  randomly_zero_out(vnet.Uact2, vnet.Uact1, vnet.numClients, 0.2);
   clock_gettime(CLOCK_MONOTONIC, (&(timemeasure.start)));
   for (int i = 0; i < vnet.numClients; i++) {
     if (vnet.Uact2[i] == 0)
@@ -791,7 +797,7 @@ int main()
   DscPRG prg;
   PRG_Config(&prg, SEC_PARAM, size);
   PRG_SeedGen(&prg);
-  randomly_zero_out(vnet.Uact3, vnet.Uact2, vnet.numClients, 0.1);
+  randomly_zero_out(vnet.Uact3, vnet.Uact2, vnet.numClients, 0.2);
   VNET_UNMask(&vnet, &prg);
   PRG_Free(&prg);
   clock_gettime(CLOCK_MONOTONIC, (&(timemeasure.end)));
