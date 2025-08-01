@@ -271,10 +271,9 @@ void VNET_KeyShare(DscVNet *vnet, int i)
       vnet->Users[i].sverify[z] = malloc(8);
       memcpy(vnet->Users[i].sverify[z], vnet->Users[i].prf.randomOutput,8);
    }
+
    char* betaMasked;
    char* betaVerify;
-
-
    size_t size1 = mpz_to_byteArray(&betaMasked, vnet->Users[i].betaMasked);
    vnet->Users[i].betaMaskedSize = size1;
    size_t size2 = mpz_to_byteArray(&betaVerify, vnet->Users[i].betaVerify);
@@ -285,10 +284,8 @@ void VNET_KeyShare(DscVNet *vnet, int i)
    ThrCrypt_Enc(&(vnet->thrcrypt),B,size1+size2);
    vnet->Users[i].B = vnet->thrcrypt.cipher;
    free(betaMasked);free(betaVerify);free(B);
-   printf(",B%d encrypted,",i);
 
-
-   char* P = malloc(2*(vnet->numClients)*8);
+   char* P = calloc(2*(vnet->numClients)*8,sizeof(char));
    for (int j = 0; j < vnet->numClients; j++) {
       if(j==i)
          continue;
@@ -722,6 +719,7 @@ void randomly_zero_out(uint16_t *dest, uint16_t *src, size_t size, double percen
 int main()
 {
 
+
   DscTimeMeasure timemeasure;
 
   uint32_t size = GRAD_SIZE * 4;
@@ -731,7 +729,7 @@ int main()
   PRG_SeedGen(&prg2);
 
   DscVNet vnet;
-
+   printf("size of usigned long: %lu\n",sizeof(unsigned long));
   clock_gettime(CLOCK_MONOTONIC, (&(timemeasure.start)));
   VNET_Config(&vnet);
   clock_gettime(CLOCK_MONOTONIC, (&(timemeasure.end)));
@@ -750,9 +748,10 @@ int main()
   printf("In Milliseconds: %ld\n", timemeasure.milliseconds);
   printf("In Microseconds: %ld\n", timemeasure.microseconds);
 
-  double percentage = 1;
+  double percentage = 0.8;
   size_t count = (size_t)(vnet.numClients * percentage);
-  size_t selected; for (int i = 0; i < count; i++) {
+  size_t selected; 
+  for (int i = 0; i < count; i++) {
      do{
 
         selected = rand() % vnet.numClients;

@@ -734,8 +734,8 @@ void Thss_Free(DscThss *thss) {
 }
 // ###############################
 //###### ThrCrypt=(DKeyGen,Enc,Dec) (Threshold Elgamal Cryptosystem)
-void ThrCrypt_Enc_Block(DscThrCrypt *thrcrypt,char* plaintext, u_int32_t size, u_int16_t blockNumber);
-void ThrCrypt_Dec_Block(DscThrCrypt *thrcrypt, u_int16_t blockNumber);
+void ThrCrypt_Enc_Block(DscThrCrypt *thrcrypt,char* plaintext, u_int32_t size, u_int32_t blockNumber);
+void ThrCrypt_Dec_Block(DscThrCrypt *thrcrypt, u_int32_t blockNumber);
 u_int16_t decode_mpz_as_byteArray(char* rop, mpz_ptr integer);
 void encode_bytes_as_mpz(mpz_ptr rop, char *byteArray, u_int32_t size);
 
@@ -778,7 +778,7 @@ void ThrCrypt_Enc(DscThrCrypt *thrcrypt,char* plaintext, u_int32_t size){
   free(thrcrypt->plaintextInput);
 
 }
-void ThrCrypt_Enc_Block(DscThrCrypt *thrcrypt,char* plaintext, u_int32_t size, u_int16_t blockNumber){
+void ThrCrypt_Enc_Block(DscThrCrypt *thrcrypt,char* plaintext, u_int32_t size, u_int32_t blockNumber){
   mpz_t input;
   mpz_init(input);
   encode_bytes_as_mpz(input, plaintext, size);
@@ -835,7 +835,7 @@ void ThrCrypt_Dec(DscThrCrypt *thrcrypt)
   }
   thrcrypt->plaintextOutput = realloc(thrcrypt->plaintextOutput,thrcrypt->sizeOfPlaintext);
 }
-void ThrCrypt_Dec_Block(DscThrCrypt *thrcrypt, u_int16_t blockNumber)
+void ThrCrypt_Dec_Block(DscThrCrypt *thrcrypt, u_int32_t blockNumber)
 {
   mpz_t s, m;
   mpz_inits(s,m,NULL);
