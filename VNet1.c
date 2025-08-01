@@ -21,10 +21,10 @@ gcc VNet.c VNet.c -o VNet -I ~/.local/include/pbc -L ~/.local/lib -Wl,-rpath ~/.
    -lgmp -l tomcrypt -l m
 
 *********************************************************************************************************************************************/
-#define GRAD_SIZE 1
-#define USERS_SIZE 10
+#define GRAD_SIZE 10
+#define USERS_SIZE 30
 #define SEC_PARAM  16 //in bytes
-#define Threshold 3
+#define Threshold 4
 typedef struct {
    int Uid; // Unique ID for the user
    //unsigned char *vk;
@@ -38,7 +38,8 @@ typedef struct {
    mpz_t *maskedLocalVector;
    mpz_t *maskTag;
 
-   mpz_t betaMasked, betaVerify;
+   mpz_t betaMasked; 
+   mpz_t betaVerify;  
    u_int32_t betaMaskedSize,betaVerifySize;
 
    DscPRF prf;
@@ -86,14 +87,12 @@ void generate_random_mpz_vnet(DscVNet *vnet, mpz_ptr rndelement)
    mpz_urandomm(rndelement, vnet->grp.state, vnet->grp.prime);
 }
 //prints hex code
-void print(char* a, u_int32_t size, char* name)
+void print(char* a, u_int32_t size)
 {
-   printf("\n******* Debug *********");
-   printf("\n%s :\n",name);
    for(int i =0;i<size;i++){
-      printf("%02x",(unsigned char)a[i]);
+      printf(" %02x",(unsigned char)a[i]);
    }
-   printf("\n**********************\n");
+   printf("\n");
 }
 //prints hex code
 void printIndex(char* a, u_int32_t size, char* name,u_int32_t index)
@@ -243,6 +242,9 @@ void VNET_KeyShare(DscVNet *vnet, int i)
       memcpy(vnet->Users[i].prf.key, sharedSecret, vnet->secparam); //F_k, k is the same for users i,j
       free(sharedSecret);
 
+      memset(str1,0,16);
+      memset(str2,0,16);
+
       sprintf((char *)str1, "%d,%d", vnet->rndlbl, 0); //used for generating s_i,j
       sprintf((char *)str2, "%d,%d", vnet->rndlbl, 1); //used for generating s_i,j'
 
@@ -251,6 +253,7 @@ void VNET_KeyShare(DscVNet *vnet, int i)
       PRF_Eval(&(vnet->Users[i].prf),str1,16);
       vnet->Users[i].sdata[z] = malloc(8);
       memcpy(vnet->Users[i].sdata[z],vnet->Users[i].prf.randomOutput,8);
+      
 
       
       //initialize s_i,j'
@@ -329,10 +332,7 @@ void VNET_Mask(DscVNet *vnet, int i, DscPRG *prg)
       mpz_set_ui(vnet->Users[i].maskTag[k],0);
    }
  
-   char *str1 = malloc(16 * sizeof(unsigned char));
-   memset(str1,0,16);
-   sprintf((char *)str1, "%d,%d", vnet->rndlbl, 0);
-
+   
    // Prf key
    char* vk;
    size_t vkSize = mpz_to_byteArray(&vk, vnet->vk);
@@ -340,16 +340,18 @@ void VNET_Mask(DscVNet *vnet, int i, DscPRG *prg)
    memcpy(vnet->Users[i].prf.key, vk, vnet->secparam);
    free(vk);
    
-
+   //generate k_p
+   char *str1 = malloc(16 * sizeof(unsigned char));
+   memset(str1,0,16);
+   sprintf((char *)str1, "%d,%d", vnet->rndlbl, 0);
    memset(prg->hmac.key,0,vnet->secparam); //for any letover bytes of key to be zero
    PRF_Eval(&(vnet->Users[i].prf),str1,16);
    memcpy((char*)(prg->hmac.key),vnet->Users[i].prf.randomOutput, MIN(32,vnet->secparam));
    free(str1);
-
    PRG_Eval(prg);
    byteArray_to_mpz(vnet->Users[i].k_p, (char*)prg->randomOutput, prg->size);
    mpz_mod(vnet->Users[i].k_p,vnet->Users[i].k_p,vnet->grp.prime);
-
+   //generate k_s_i
    char *str2 = malloc(16 * sizeof(unsigned char));
    memset(str2,0,16);
    sprintf((char *)str2, "%d,%d", vnet->rndlbl, i);
@@ -357,7 +359,6 @@ void VNET_Mask(DscVNet *vnet, int i, DscPRG *prg)
    PRF_Eval(&(vnet->Users[i].prf),str2,16);
    memcpy((char *)prg->hmac.key, vnet->Users[i].prf.randomOutput, MIN(32,vnet->secparam)); 
    free(str2);  
-
    PRG_Eval(prg);
    memcpy((char *)vnet->Users[i].k_s_i, prg->randomOutput,prg->size);
 
@@ -365,19 +366,17 @@ void VNET_Mask(DscVNet *vnet, int i, DscPRG *prg)
    for (int z = 0; z < vnet->numClients; z++) {
       if(z==i || vnet->Uact1[z]==0)
          continue;
-      // Mask Gradient
+      // Mask Gradient prgArray = G(s_i,z)
       memset(prg->hmac.key,0,vnet->secparam);
       memcpy((char *)prg->hmac.key, (const char *)vnet->Users[i].sdata[z], MIN(8,vnet->secparam));
       PRG_Eval(prg);
       memcpy(prgArray,prg->randomOutput,prg->size);
-      //bytes_to_ints(prg->randomOutput, prgArray, vnet->grdSize); data is random so the ordre of bytes don't matter
 
-      // Mask Tag
+      // Mask Tag prgArrayTag = G(s hat_i,z)
       memset(prg->hmac.key,0,vnet->secparam);
       memcpy((char *)prg->hmac.key, (const char *)vnet->Users[i].sverify[z], MIN(8,vnet->secparam));
       PRG_Eval(prg);
       memcpy(prgArrayTag,prg->randomOutput,prg->size);
-      //bytes_to_ints(prg->randomOutput, prgArrayTag, vnet->grdSize);
 
       for (int j = 0; j < vnet->grdSize; j++) {
          if(z>i){
@@ -405,13 +404,12 @@ void VNET_Mask(DscVNet *vnet, int i, DscPRG *prg)
       mpz_mod(vnet->Users[i].maskTag[j],vnet->Users[i].maskTag[j],vnet->grp.prime);
    }
 
-   // Add PRG-Beta to mask
+   // generate prgArray G(beta_i)
    char *betaMasked;
    size_t betaMaskedSize = mpz_to_byteArray(&betaMasked, vnet->Users[i].betaMasked);
    padWithZero(&betaMasked, betaMaskedSize, vnet->secparam);
    memcpy((char *)prg->hmac.key, (char *)betaMasked, vnet->secparam);
    free(betaMasked);
-
    PRG_Eval(prg);
    memcpy(prgArray,prg->randomOutput,prg->size);
 
@@ -420,13 +418,13 @@ void VNET_Mask(DscVNet *vnet, int i, DscPRG *prg)
       mpz_mod(vnet->Users[i].maskedLocalVector[j],vnet->Users[i].maskedLocalVector[j],vnet->grp.prime);
    }
 
-   // Add PRG-Betatag to mask Tag
+
+   // generate G( prgArrayTag = beta hat_i)
    char* betatag;
    size_t betatagSize = mpz_to_byteArray(&betatag, vnet->Users[i].betaVerify);
    padWithZero(&betatag, betatagSize, vnet->secparam);
    memcpy((char *)prg->hmac.key, betatag, vnet->secparam);
    free(betatag);
-
    PRG_Eval(prg);
    memcpy(prgArrayTag,prg->randomOutput,prg->size);
 
@@ -439,6 +437,12 @@ void VNET_Mask(DscVNet *vnet, int i, DscPRG *prg)
       mpz_addmul_ui(vnet->Users[i].maskTag[j],vnet->Users[i].k_p,((uint32_t *)(vnet->Users[i].plainLocalVector))[j]);
       mpz_mod(vnet->Users[i].maskTag[j],vnet->Users[i].maskTag[j],vnet->grp.prime);    
    }
+
+   free(prgArray);free(prgArrayTag);
+   for(int k=0;k<vnet->grdSize;k++){
+      mpz_clears(Sum_prgArray[k],Sum_prgArrayTag[k],NULL);
+   }
+
 }
 
 void VNET_UNMask(DscVNet *vnet, DscPRG *prg)
@@ -521,21 +525,38 @@ void VNET_UNMask(DscVNet *vnet, DscPRG *prg)
       mpz_set_ui(vnet->tagGlobalVector[k],0);
       mpz_set_ui(Sum_prgArray[k],0);
    }
-
-
    for (int i = 0; i < vnet->numClients; i++) {
       if(vnet->Uact2[i]==0)
          continue;
+
+      // generate prgArray G(beta_i)
+      char *betaMasked;
+      size_t betaMaskedSize = mpz_to_byteArray(&betaMasked, vnet->Users[i].betaMasked);
+      padWithZero(&betaMasked, betaMaskedSize, vnet->secparam);
+      memcpy((char *)prg->hmac.key, (char *)betaMasked, vnet->secparam);
+      free(betaMasked);
+      PRG_Eval(prg);
+      memcpy(prgArray,prg->randomOutput,prg->size);
+
+      // generate G( prgArrayTag = beta hat_i)
+      char* betatag;
+      size_t betatagSize = mpz_to_byteArray(&betatag, vnet->Users[i].betaVerify);
+      padWithZero(&betatag, betatagSize, vnet->secparam);
+      memcpy((char *)prg->hmac.key, betatag, vnet->secparam);
+      free(betatag);
+      PRG_Eval(prg);
+      memcpy(prgArrayTag,prg->randomOutput,prg->size);
       
       for (int j = 0; j < vnet->grdSize; j++){
       mpz_add(Sum_prgArray[j],Sum_prgArray[j],vnet->Users[i].maskedLocalVector[j]);
       mpz_mod(Sum_prgArray[j],Sum_prgArray[j],vnet->grp.prime);
-      mpz_sub(Sum_prgArray[j],Sum_prgArray[j],vnet->Users[i].betaMasked);
-      mpz_mod(Sum_prgArray[j],Sum_prgArray[j],vnet->grp.prime);
 
+      mpz_sub_ui(Sum_prgArray[j],Sum_prgArray[j],prgArray[j]);
+      mpz_mod(Sum_prgArray[j],Sum_prgArray[j],vnet->grp.prime);
+      
       mpz_add(vnet->tagGlobalVector[j],vnet->tagGlobalVector[j],vnet->Users[i].maskTag[j]);
       mpz_mod(vnet->tagGlobalVector[j],vnet->tagGlobalVector[j],vnet->grp.prime);
-      mpz_sub(vnet->tagGlobalVector[j],vnet->tagGlobalVector[j],vnet->Users[i].betaVerify);
+      mpz_sub_ui(vnet->tagGlobalVector[j],vnet->tagGlobalVector[j],prgArrayTag[j]);
       mpz_mod(vnet->tagGlobalVector[j],vnet->tagGlobalVector[j],vnet->grp.prime);
       }
    }
@@ -633,7 +654,7 @@ void VNET_Vrfy(DscVNet *vnet,DscPRG* prg)
       memcpy(k_s_i[user], prg->randomOutput, prg->size);    
    }
    free(str2);
-   
+
    mpz_t *tagPrime = malloc(vnet->grdSize * sizeof(mpz_t*));
 
    for(int j =0;j<vnet->grdSize;j++){
@@ -705,20 +726,16 @@ int main()
   VNET_Config(&vnet);
 
   VNET_Init(&vnet);
-  for (int i = 0; i < vnet.numClients; i++) {
-    vnet.Uact1[i] = 1;
-  }
-  // users active (90%)
-  // double percentage = 0.90;
-  // size_t count = (size_t)(vnet.numClients * percentage); // Number of
-  // elements to set to 1 size_t selected; for (int i = 0; i < count; i++) {
-  //    do{
+  double percentage = 0.90;
+  size_t count = (size_t)(vnet.numClients * percentage);
+  size_t selected; for (int i = 0; i < count; i++) {
+     do{
 
-  //       selected = rand() % vnet.numClients;
-  //    }while (vnet.Uact1[selected] == 1);
-  //    vnet.Uact1[selected] =1;
-  //    printf("\nUact[%lu]=1",selected);
-  // }
+        selected = rand() % vnet.numClients;
+     }while (vnet.Uact1[selected] == 1);
+     vnet.Uact1[selected] =1;
+  }
+
   clock_gettime(CLOCK_MONOTONIC, (&(timemeasure.start)));
   for (int i = 0; i < vnet.numClients; i++) {
     if (vnet.Uact1 == 0)
@@ -733,7 +750,7 @@ int main()
   printf("In Microseconds: %ld\n", timemeasure.microseconds);
 
   // Step 2: Set 10% of indices in Uact2 to 0 based on Uact1
-  randomly_zero_out(vnet.Uact2, vnet.Uact1, vnet.numClients, 0);
+  randomly_zero_out(vnet.Uact2, vnet.Uact1, vnet.numClients, 0.1);
 
   clock_gettime(CLOCK_MONOTONIC, (&(timemeasure.start)));
   for (int i = 0; i < vnet.numClients; i++) {
@@ -755,7 +772,7 @@ int main()
   DscPRG prg;
   PRG_Config(&prg, SEC_PARAM, size);
   PRG_SeedGen(&prg);
-  randomly_zero_out(vnet.Uact3, vnet.Uact2, vnet.numClients, 0.10);
+  randomly_zero_out(vnet.Uact3, vnet.Uact2, vnet.numClients, 0.1);
   VNET_UNMask(&vnet, &prg);
   for (int k = 0; k < vnet.grdSize; k++)
     printf("\n****Global Gradient[%d]: %lu \n", k,
