@@ -21,18 +21,21 @@ gcc VNet.c VNet.c -o VNet -I ~/.local/include/pbc -L ~/.local/lib -Wl,-rpath ~/.
    -lgmp -l tomcrypt -l m
 
 *********************************************************************************************************************************************/
-#define GRAD_SIZE 10
-#define USERS_SIZE 30
+#define GRAD_SIZE 200
+#define USERS_SIZE 100
 #define SEC_PARAM  16 //in bytes
 #define Threshold 4
+#define PrimeBits 1024 //used for masking (if the number of users is large, value of globalGradient might exceed this value 
+                       //which will make the result invalid, because the result is mod p.
+
 typedef struct {
    int Uid; // Unique ID for the user
-   //unsigned char *vk;
+
    mpz_t skey;
    mpz_t pkey;
    mpz_t shares_x;      // id related to thss
    mpz_t shares_y;      // secret share related to thss
-   //mpz_t *sharedSecret; // shared secret of this user with other users(same thing as k in the paper)
+
    u_int32_t *plainLocalVector;
 
    mpz_t *maskedLocalVector;
@@ -160,7 +163,7 @@ void VNET_Config(DscVNet *vnet)
    // To initialize PRF for server
    PRF_Config(&(vnet->prf), vnet->secparam);
    PRF_KeyGen(&(vnet->prf));
-   GroupGen_Config(&(vnet->grp),512);
+   GroupGen_Config(&(vnet->grp),PrimeBits);
    // Allocate memory for the array of users
 
    vnet->Users = malloc(vnet->numClients * sizeof(DscClient));
@@ -774,9 +777,6 @@ int main()
   PRG_SeedGen(&prg);
   randomly_zero_out(vnet.Uact3, vnet.Uact2, vnet.numClients, 0.1);
   VNET_UNMask(&vnet, &prg);
-  for (int k = 0; k < vnet.grdSize; k++)
-    printf("\n****Global Gradient[%d]: %lu \n", k,
-           (unsigned long)vnet.gradGlobalVector[k]);
   PRG_Free(&prg);
 
   DscPRG prg3;
@@ -792,25 +792,4 @@ int main()
   printf("In Nanoseconds: %ld\n\n", timemeasure.nanoseconds);
   PRG_Free(&(prg3));
   return 0;
-
-  // DscThrCrypt thr ;
-  // ThrCrypt_Config(&thr, 512, USERS_SIZE, Threshold);
-  // ThrCrypt_DKeyGen(&thr);
-  // char* hex =
-  // "3f0ad1d0ae35fc6445f7a978ba5c24e673c4de787582b83daafe3b31042a1b0729228baf9332fc00b4289ac39bd2adebd0a232ffbf00badc41dc7b1e72b1201b";
-  // mpz_t test;
-  // mpz_init(test);
-  // mpz_set_str(test,hex,16);
-  // gmp_printf("mpz_t:\n%Zx\n",test);
-  // char* byteArray;
-  // uint32_t s = mpz_to_byteArray(&byteArray, test);
-  // print(byteArray,s,"byteArray");
-  // ThrCrypt_Enc(&thr,byteArray,s);
-  // DscCipher cipher = thr.cipher;
-  // ThrCrypt_Enc(&thr,"wefmpk_SDKIFPO:LKSDFiopodskf\10",30);
-  // ThrCrypt_Enc(&thr,"\0\1\2\3\4sadfklsamdf\5\6\7\10",21);
-  // thr.cipher = cipher;
-  // ThrCrypt_Dec(&thr);
-
-  // print(thr.plaintextOutput,thr.sizeOfPlaintext,"decrypted");
 }

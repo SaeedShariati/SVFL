@@ -132,7 +132,7 @@ void PRG_Eval(DscPRG *prg) {
     sprintf(counter_str, "%lu", counter);
     memcpy(prg->hmac.plaintextInput + 16, &counter_str, 5);
     HMAC_Eval(&(prg->hmac));
-    bytes_to_copy = (remaining < temp_output_len) ? remaining : temp_output_len;
+    bytes_to_copy = MIN((remaining < temp_output_len) ? remaining : temp_output_len,32);
     memcpy(prg->randomOutput + generated, prg->hmac.DigestOutput,
            bytes_to_copy);
 
