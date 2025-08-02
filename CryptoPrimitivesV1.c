@@ -10,6 +10,8 @@
 #include <tomcrypt.h>
 #include <unistd.h>
 #include <stdint.h>
+#include <openssl/evp.h>
+#include <openssl/hmac.h>
 
 // ############ Time Measurement ############
 void Time_Measure(DscTimeMeasure *time) {
@@ -101,6 +103,38 @@ void PRF_Free(DscPRF *prf) {
   free(prf->randomOutput);
 }
 
+/* 16 bytes key
+void PRG(uint8_t *out, size_t outlen, const uint8_t *seed16) {
+  EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
+  uint8_t iv[16] = {0};
+  
+  EVP_EncryptInit_ex(ctx, EVP_aes_128_ctr(), NULL, seed16, iv);
+  memset(out,0,20);
+  int len;
+  EVP_EncryptUpdate(ctx, out, &len, out, outlen);  // encrypt zeros
+  EVP_CIPHER_CTX_free(ctx);
+}
+*/
+
+//outlen is in bytes
+void PRG(uint8_t *out, size_t outlen, const uint8_t *key32) {
+  EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
+  uint8_t iv[16] = {0};  // 128-bit IV (can also be passed as a parameter)
+
+  EVP_EncryptInit_ex(ctx, EVP_aes_256_ctr(), NULL, key32, iv);
+  memset(out, 0, outlen);
+  int len;
+  EVP_EncryptUpdate(ctx, out, &len, out, outlen);
+  EVP_CIPHER_CTX_free(ctx);
+}
+void PRF(
+    uint8_t out[32],
+    const uint8_t *key, size_t keylen,
+    const uint8_t *input, size_t inputlen
+) {
+    unsigned int outlen = 32;
+    HMAC(EVP_sha256(), key, keylen, input, inputlen, out, &outlen);
+}
 // ############ PRG=(SeedGen,Eval) ############
 //secparam here is in  bytes
 void PRG_Config(DscPRG *prg, int secparam, uint32_t size) {

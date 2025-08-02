@@ -390,6 +390,8 @@ void PRG_Config(DscPRG *prg, int secparam, uint32_t size);
 void PRG_SeedGen(DscPRG *prg);
 void PRG_Eval(DscPRG *prg);
 void PRG_Free(DscPRG *prg);
+void PRG(uint8_t *out, size_t outlen, const uint8_t *seed32);
+void PRF(uint8_t out[32],const uint8_t *key, size_t keylen,const uint8_t *input, size_t inputlen);
 /*++++++++++ Test Program - PRG +++++++++++++++++ 
    DscPRG prg;
    PRG_Config(&prg,16,32);
