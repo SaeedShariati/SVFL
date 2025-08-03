@@ -22,10 +22,10 @@ gcc VNet.c VNet.c -o VNet -I ~/.local/include/pbc -L ~/.local/lib -Wl,-rpath ~/.
    -lgmp -l tomcrypt -l m
 
 *********************************************************************************************************************************************/
-#define GRAD_SIZE 112
-#define USERS_SIZE 1234
+#define GRAD_SIZE 10000
+#define USERS_SIZE 1000
 #define SEC_PARAM 32  //in bytes
-#define Threshold 53
+#define Threshold 10
 #define DropOut 0.1 //what rate of users dropout at every step
 
 typedef struct{
@@ -193,7 +193,7 @@ void VNET_Config(DscVNet *vnet)
       vnet->Users[i].k_s_i = malloc(vnet->grdSize* sizeof(mpz_t));
 
       for (int j = 0; j < vnet->grdSize; j++) {
-         vnet->Users[i].plainLocalVector[j]= i;//rand_uint64();
+         vnet->Users[i].plainLocalVector[j]= rand_uint64();
          mpz_init2(vnet->Users[i].k_p[j],sizeof(unsigned long)*8);
          mpz_init(vnet->Users[i].k_s_i[j]);
 
@@ -290,15 +290,7 @@ void VNET_Mask(DscVNet *vnet, uint16_t i)
    }
 
    unsigned long *prgArray = malloc(vnet->grdSize * sizeof(unsigned long));
-   mpz_t *Sum_prgArray = malloc(vnet->grdSize * sizeof(mpz_t));
-
    unsigned long *prgArrayTag = malloc(vnet->grdSize * sizeof(unsigned long));
-   mpz_t *Sum_prgArrayTag = malloc(vnet->grdSize * sizeof(mpz_t));
-
-   for(int k=0;k<vnet->grdSize;k++){
-      mpz_inits(Sum_prgArray[k],Sum_prgArrayTag[k],NULL);
-   }
- 
    
    //generate k_p
    uint8_t str1 [6]={0};
@@ -329,21 +321,19 @@ void VNET_Mask(DscVNet *vnet, uint16_t i)
          continue;
       // Mask Gradient prgArray = G(s_i,z)
       PRG((uint8_t*)prgArray,GRAD_SIZE*sizeof(unsigned long),vnet->Users[i].sdata[z].val);
-
       // Mask Tag prgArrayTag = G(s hat_i,z)
       PRG((uint8_t*)prgArrayTag,GRAD_SIZE*sizeof(unsigned long),vnet->Users[i].sverify[z].val);
 
-
       if(z>i){
          for (int j = 0; j < vnet->grdSize; j++) {
-            mpz_add_ui(Sum_prgArray[j],Sum_prgArray[j],prgArray[j]);
-            mpz_add_ui(Sum_prgArrayTag[j],Sum_prgArrayTag[j],prgArrayTag[j]);
+            mpz_add_ui(vnet->Users[i].maskedLocalVector[j],vnet->Users[i].maskedLocalVector[j],prgArray[j]);
+            mpz_add_ui(vnet->Users[i].maskTag[j],vnet->Users[i].maskTag[j],prgArrayTag[j]);
          }
       }
       else{
          for (int j = 0; j < vnet->grdSize; j++) {
-            mpz_sub_ui(Sum_prgArray[j],Sum_prgArray[j],prgArray[j]);
-            mpz_sub_ui(Sum_prgArrayTag[j],Sum_prgArrayTag[j],prgArrayTag[j]);
+            mpz_sub_ui(vnet->Users[i].maskedLocalVector[j],vnet->Users[i].maskedLocalVector[j],prgArray[j]);
+            mpz_sub_ui(vnet->Users[i].maskTag[j],vnet->Users[i].maskTag[j],prgArrayTag[j]);
          }
       }
    }
@@ -351,9 +341,6 @@ void VNET_Mask(DscVNet *vnet, uint16_t i)
    for (int j = 0; j < vnet->grdSize; j++) {
       mpz_add_ui(vnet->Users[i].maskedLocalVector[j],vnet->Users[i].maskedLocalVector[j],
          vnet->Users[i].plainLocalVector[j]);
-      mpz_add(vnet->Users[i].maskedLocalVector[j], vnet->Users[i].maskedLocalVector[j], Sum_prgArray[j]);
-
-      mpz_add(vnet->Users[i].maskTag[j],vnet->Users[i].maskTag[j],Sum_prgArrayTag[j]);
    }
 
    // generate prgArray G(beta_i)
@@ -382,10 +369,6 @@ void VNET_Mask(DscVNet *vnet, uint16_t i)
    }
 
    free(prgArray);free(prgArrayTag);
-   for(int k=0;k<vnet->grdSize;k++){
-      mpz_clears(Sum_prgArray[k],Sum_prgArrayTag[k],NULL);
-   }
-
 }
 
 void VNET_UNMask(DscVNet *vnet)
@@ -591,7 +574,7 @@ void randomly_zero_out(uint16_t *dest, uint16_t *src, size_t size, double percen
    size_t i, selected;
 
    // Copy src to dest
-   for (i = 0; i < size; i++) {
+   for (i = 0; i < USERS_SIZE; i++) {
       dest[i] = src[i]; // Copy previous array
    }
 
@@ -657,7 +640,7 @@ int main()
 
   // Step 2: Set 10% of indices in Uact2 to 0 based on Uact1
 
-  randomly_zero_out(vnet.Uact2, vnet.Uact1, vnet.numClients, DropOut);
+  randomly_zero_out(vnet.Uact2, vnet.Uact1, (1-DropOut)*vnet.numClients, DropOut);
   clock_gettime(CLOCK_MONOTONIC, (&(timemeasure.start)));
   for (int i = 0; i < vnet.numClients; i++) {
     if (vnet.Uact2[i] == 0)
@@ -675,7 +658,7 @@ int main()
   // Step 3: Set 10% of indices in Uact3 to 0 based on Uact2
 
   clock_gettime(CLOCK_MONOTONIC, (&(timemeasure.start)));
-  randomly_zero_out(vnet.Uact3, vnet.Uact2, vnet.numClients, DropOut);
+  randomly_zero_out(vnet.Uact3, vnet.Uact2, (1-DropOut)*(1-DropOut)*vnet.numClients, DropOut);
   VNET_UNMask(&vnet);
   clock_gettime(CLOCK_MONOTONIC, (&(timemeasure.end)));
   Time_Measure(&timemeasure);
