@@ -84,7 +84,7 @@ typedef struct {
 
 } DscVNet;
 
-inline void generate_random_mpz_vnet(DscVNet *vnet, mpz_ptr rndelement)
+static inline void generate_random_mpz_vnet(DscVNet *vnet, mpz_ptr rndelement)
 {
    mpz_urandomm(rndelement, vnet->grp.state, vnet->grp.prime);
 }
@@ -131,12 +131,12 @@ uint32_t mpz_to_byteArray(char** rop, mpz_ptr integer){
 
     return (uint32_t)count;
 }
-inline void byteArray_to_mpz(mpz_ptr rop, char *byteArray, uint32_t size) {
+static inline void byteArray_to_mpz(mpz_ptr rop, char *byteArray, uint32_t size) {
   mpz_import(rop, size, 1, sizeof(char), 0, 0,
               byteArray);
 }
 //if originalSize<newSize then adds zeros to the end until the size of bytes* becomes newSize
-inline void padWithZero(char** bytes,size_t originalSize,size_t newSize){
+static inline void padWithZero(char** bytes,size_t originalSize,size_t newSize){
    if(originalSize<newSize){
 
       char* temp = realloc(*bytes,newSize);
