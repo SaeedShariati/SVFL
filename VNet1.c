@@ -228,8 +228,11 @@ void VNET_KeyShare(DscVNet *vnet, int i)
    unsigned char str1[5];
 
    for (int z = 0; z < vnet->numClients; z++) {
-      if(z==i)
+      if(z==i){
+         memset(vnet->Users[i].sdata[z].val,1,sizeof(vnet->Users[i].sdata[z].val));
+         memset(vnet->Users[i].sverify[z].val,1,sizeof(vnet->Users[i].sverify[z].val));
          continue;
+      }
       mpz_t k;
       mpz_init(k);
       char* sharedSecret; 
