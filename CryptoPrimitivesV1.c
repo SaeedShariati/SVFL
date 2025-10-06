@@ -745,7 +745,7 @@ void Thss_ReCons(DscThss *thss) {
     mpz_add(thss->recovered_secret, thss->recovered_secret, term);
     mpz_mod(thss->recovered_secret, thss->recovered_secret, thss->prime);
   }
-  for (int i = 0; i < thss->threshold; i++) {
+  for (int i = 0; i < thss->num_shares; i++) {
     mpz_clear(thss->shares_x[i]);
     mpz_clear(thss->shares_y[i]);
   }
