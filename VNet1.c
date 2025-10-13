@@ -302,7 +302,7 @@ void VNET_Mask(DscVNet *vnet, uint16_t i)
    str1[2] = (vnet->rndlbl >> 8) & 0xFF;
    str1[3] = vnet->rndlbl & 0xFF;
 
-   unsigned long randomOutput[GRAD_SIZE*sizeof(unsigned long)];
+   unsigned long randomOutput[GRAD_SIZE];
    uint8_t t[32];
    PRF(t,vnet->vk,sizeof(vnet->vk),str1,sizeof(str1));
    PRG((uint8_t*)randomOutput,sizeof(randomOutput),t);
@@ -526,7 +526,7 @@ void VNET_Vrfy(DscVNet *vnet)
    str1[2] = (vnet->rndlbl >> 8) & 0xFF;
    str1[3] = vnet->rndlbl & 0xFF;
    mpz_t *k_p = malloc(GRAD_SIZE*sizeof(mpz_t));
-   unsigned long randomOutput[GRAD_SIZE*sizeof(unsigned long)];
+   unsigned long randomOutput[GRAD_SIZE];
 
    uint8_t t[32];
    PRF(t,vnet->vk,sizeof(vnet->vk),str1,sizeof(str1));
