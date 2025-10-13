@@ -22,11 +22,11 @@ gcc VNet.c VNet.c -o VNet -I ~/.local/include/pbc -L ~/.local/lib -Wl,-rpath ~/.
    -lgmp -l tomcrypt -l m
 
 *********************************************************************************************************************************************/
-#define GRAD_SIZE 10000
-#define USERS_SIZE 1000
+#define GRAD_SIZE 1000
+#define USERS_SIZE 100
 #define SEC_PARAM 32  //in bytes
 #define Threshold 10
-#define DropOut 0.1 //what rate of users dropout at every step
+#define DropOut 0 //what rate of users dropout at every step
 
 typedef struct{
    uint8_t val[32];
