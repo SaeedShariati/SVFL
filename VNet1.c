@@ -26,7 +26,7 @@ gcc VNet.c VNet.c -o VNet -I ~/.local/include/pbc -L ~/.local/lib -Wl,-rpath ~/.
 #define USERS_SIZE 100
 #define SEC_PARAM 32  //in bytes
 #define Threshold 10
-#define DropOut 0 //what rate of users dropout at every step
+#define DropOut 0.1 //what rate of users dropout at every step
 
 typedef struct{
    uint8_t val[32];
@@ -302,19 +302,20 @@ void VNET_Mask(DscVNet *vnet, uint16_t i)
    str1[2] = (vnet->rndlbl >> 8) & 0xFF;
    str1[3] = vnet->rndlbl & 0xFF;
 
-   uint8_t randomOutput[GRAD_SIZE*sizeof(unsigned long)];
+   unsigned long randomOutput[GRAD_SIZE*sizeof(unsigned long)];
    uint8_t t[32];
    PRF(t,vnet->vk,sizeof(vnet->vk),str1,sizeof(str1));
-   PRG(randomOutput,sizeof(randomOutput),t);
+   PRG((uint8_t*)randomOutput,sizeof(randomOutput),t);
    for(int j=0;j<GRAD_SIZE;j++){
       mpz_set_ui(vnet->Users[i].k_p[j],((unsigned long*)randomOutput)[j]);
    }
+
 
    //generate k_s_i
    str1[4] = (i >>  8)&0xFF;
    str1[5] = i & 0xFF;
    PRF(t,vnet->vk,sizeof(vnet->vk),str1,sizeof(str1));
-   PRG(randomOutput,sizeof(randomOutput),t);
+   PRG((uint8_t*)randomOutput,sizeof(randomOutput),t);
    for(int j=0;j<GRAD_SIZE;j++){
       mpz_set_ui(vnet->Users[i].k_s_i[j],((unsigned long*)randomOutput)[j]);
    }
