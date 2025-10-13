@@ -166,7 +166,7 @@ void VNET_Config(DscVNet *vnet)
    vnet->gradGlobalVector = malloc(vnet->grdSize * sizeof(mpz_t));
    vnet->tagGlobalVector = malloc(vnet->grdSize * sizeof(mpz_t));
 
-   GroupGen_Config(&(vnet->grp),vnet->secparam*8);
+   GroupGen_Config(&(vnet->grp),vnet->secparam*8 +1);
    // Allocate memory for the array of users
 
    vnet->Users = malloc(vnet->numClients * sizeof(DscClient));
@@ -308,6 +308,7 @@ void VNET_Mask(DscVNet *vnet, uint16_t i)
    PRG((uint8_t*)randomOutput,sizeof(randomOutput),t);
    for(int j=0;j<GRAD_SIZE;j++){
       mpz_set_ui(vnet->Users[i].k_p[j],((unsigned long*)randomOutput)[j]);
+      mpz_mod(vnet->Users[i].k_p[j],vnet->Users[i].k_p[j],vnet->grp.prime);
    }
 
 
@@ -318,6 +319,7 @@ void VNET_Mask(DscVNet *vnet, uint16_t i)
    PRG((uint8_t*)randomOutput,sizeof(randomOutput),t);
    for(int j=0;j<GRAD_SIZE;j++){
       mpz_set_ui(vnet->Users[i].k_s_i[j],((unsigned long*)randomOutput)[j]);
+      mpz_mod(vnet->Users[i].k_s_i[j],vnet->Users[i].k_s_i[j],vnet->grp.prime);
    }
 
    for (int z = 0; z < vnet->numClients; z++) {
@@ -356,6 +358,7 @@ void VNET_Mask(DscVNet *vnet, uint16_t i)
 
    for (int j = 0; j < vnet->grdSize; j++) {
       mpz_add_ui(vnet->Users[i].maskedLocalVector[j],vnet->Users[i].maskedLocalVector[j],prgArray[j]);
+      mpz_mod(vnet->Users[i].maskedLocalVector[j],vnet->Users[i].maskedLocalVector[j],vnet->grp.prime);
    }
 
 
@@ -369,7 +372,8 @@ void VNET_Mask(DscVNet *vnet, uint16_t i)
    for (int j = 0; j < vnet->grdSize; j++) {
       mpz_add_ui(vnet->Users[i].maskTag[j],vnet->Users[i].maskTag[j] ,prgArrayTag[j]);
       mpz_add(vnet->Users[i].maskTag[j],vnet->Users[i].maskTag[j],vnet->Users[i].k_s_i[j]);
-      mpz_addmul_ui(vnet->Users[i].maskTag[j],vnet->Users[i].k_p[j],vnet->Users[i].plainLocalVector[j]);   
+      mpz_addmul_ui(vnet->Users[i].maskTag[j],vnet->Users[i].k_p[j],vnet->Users[i].plainLocalVector[j]);  
+      mpz_mod(vnet->Users[i].maskTag[j],vnet->Users[i].maskTag[j],vnet->grp.prime);
    }
 
    free(prgArray);free(prgArrayTag);
@@ -504,6 +508,10 @@ void VNET_UNMask(DscVNet *vnet)
          }
       }
    }
+   for (int j = 0; j < vnet->grdSize; j++) {
+      mpz_mod(vnet->gradGlobalVector[j],vnet->gradGlobalVector[j],vnet->grp.prime);
+      mpz_mod(vnet->tagGlobalVector[j],vnet->tagGlobalVector[j],vnet->grp.prime);
+   }
    free(prgArray);
    free(prgArrayTag);
 }
@@ -518,11 +526,11 @@ void VNET_Vrfy(DscVNet *vnet)
    str1[2] = (vnet->rndlbl >> 8) & 0xFF;
    str1[3] = vnet->rndlbl & 0xFF;
    mpz_t *k_p = malloc(GRAD_SIZE*sizeof(mpz_t));
-   uint8_t randomOutput[GRAD_SIZE*sizeof(unsigned long)];
+   unsigned long randomOutput[GRAD_SIZE*sizeof(unsigned long)];
 
    uint8_t t[32];
    PRF(t,vnet->vk,sizeof(vnet->vk),str1,sizeof(str1));
-   PRG(randomOutput,sizeof(randomOutput),t);
+   PRG((uint8_t*)randomOutput,sizeof(randomOutput),t);
    for(int j=0;j<GRAD_SIZE;j++){
       mpz_init_set_ui(k_p[j],((unsigned long*)randomOutput)[j]);
    }
@@ -536,7 +544,7 @@ void VNET_Vrfy(DscVNet *vnet)
       k_s_i[user] = (mpz_t *)malloc(GRAD_SIZE*sizeof(mpz_t));
 
       PRF(t,vnet->vk,sizeof(vnet->vk),str1,sizeof(str1));
-      PRG(randomOutput,sizeof(randomOutput),t);
+      PRG((uint8_t*) randomOutput,sizeof(randomOutput),t);
       for(int j=0;j<GRAD_SIZE;j++){
          mpz_init_set_ui(k_s_i[user][j],((unsigned long*)randomOutput)[j]);
       }
@@ -556,8 +564,11 @@ void VNET_Vrfy(DscVNet *vnet)
       }
    }
 
-
    for(int k=0;k<vnet->grdSize;k++){
+      //gmp_printf("tagPrime[%d] = %Zd\n",k,tagPrime[k]);
+      //gmp_printf("tagGlobal[%d] = %Zd\n",k,vnet->tagGlobalVector[k]);
+
+      mpz_mod(tagPrime[k],tagPrime[k],vnet->grp.prime);
       int result = mpz_cmp(vnet->tagGlobalVector[k],tagPrime[k]);
       if(result != 0){
          printf("\ninvalid\n");
