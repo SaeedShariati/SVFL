@@ -427,7 +427,7 @@ void Thss_Share(DscThss *thss, mpz_ptr secret) {
   for (int i = 0; i < thss->threshold; i++) {
     mpz_clear(thss->coeffs[i]);
   }
-  free(thss->coeffs);
+
 }
 void Thss_ReCons(DscThss *thss) {
   mpz_set_ui(thss->recovered_secret, 0);
@@ -454,16 +454,18 @@ void Thss_ReCons(DscThss *thss) {
     mpz_add(thss->recovered_secret, thss->recovered_secret, term);
     mpz_mod(thss->recovered_secret, thss->recovered_secret, thss->prime);
   }
-  for (int i = 0; i < thss->num_shares; i++) {
+
+  mpz_clears(term, numerator, denominator, temp, NULL);
+}
+void Thss_Free(DscThss *thss) {
+  mpz_clears(thss->secret, thss->prime, thss->recovered_secret, NULL);
+  free(thss->coeffs);
+    for (int i = 0; i < thss->num_shares; i++) {
     mpz_clear(thss->shares_x[i]);
     mpz_clear(thss->shares_y[i]);
   }
   free(thss->shares_x);
   free(thss->shares_y);
-  mpz_clears(term, numerator, denominator, temp, NULL);
-}
-void Thss_Free(DscThss *thss) {
-  mpz_clears(thss->secret, thss->prime, thss->recovered_secret, NULL);
 }
 // ###############################
 //###### ThrCrypt=(DKeyGen,Enc,Dec) (Threshold Elgamal Cryptosystem)
@@ -586,16 +588,9 @@ void ThrCrypt_Dec_Block(DscThrCrypt *thrcrypt, uint32_t blockNumber)
   mpz_clears(s,m,NULL);;
 }
 void ThrCrypt_Free(DscThrCrypt *thrcrypt) {
-  for (int i = 0; i < thrcrypt->thss.num_shares; i++) {
-    mpz_clear(thrcrypt->thss.shares_x[i]);
-    mpz_clear(thrcrypt->thss.shares_y[i]);
-  }
-  free(thrcrypt->thss.shares_x);
-  free(thrcrypt->thss.shares_y);
-  free(thrcrypt->plaintextOutput);
   mpz_clears(thrcrypt->skey,thrcrypt->pkey,NULL);
-  Thss_Free(&(thrcrypt->thss));
   GroupGen_Free(&(thrcrypt->grp));
+  Thss_Free(&(thrcrypt->thss));
 }
 void Cipher_Free(DscCipher* cipher){
   for(int i=0;i<cipher->blocks;i++){
