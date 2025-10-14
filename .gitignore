@@ -1,0 +1,43 @@
+programName
+# Compiled object files
+*.o
+*.a
+*.so
+*.out
+*.exe
+
+# Build directories
+build/
+bin/
+dist/
+
+# IDE-specific files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Dependency directories (if applicable)
+deps/
+
+# GMP-generated files (if any)
+*.gch
+
+# macOS files
+.DS_Store
+
+# Local development configs (if any)
+.env
+run.sh
+vgcore.48168
+code.zip
+callgrind.out.178813
+report.txt
+Code.zip
+flame_large.svg
+flame.svg
+flame2.svg
+output.svg
+perf.data
+perf.data.old
+perf.script
