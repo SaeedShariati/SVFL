@@ -40,7 +40,7 @@ typedef struct {
    mpz_t shares_x;      // id related to thss
    mpz_t shares_y;      // secret share related to thss
 
-   unsigned long *plainLocalVector;
+   uint32_t *plainLocalVector;
 
    mpz_t *maskedLocalVector;
    mpz_t *maskTag;
@@ -186,7 +186,7 @@ void VNET_Config(DscVNet *vnet)
 
       // To initialize local data vector for each user
       srand(time(NULL));
-      vnet->Users[i].plainLocalVector = calloc(vnet->grdSize, sizeof(unsigned long));
+      vnet->Users[i].plainLocalVector = calloc(vnet->grdSize, sizeof(uint32_t));
       vnet->Users[i].maskedLocalVector = malloc(vnet->grdSize * sizeof(mpz_t));
       vnet->Users[i].maskTag = malloc(vnet->grdSize* sizeof(mpz_t));
       vnet->Users[i].k_p = malloc(vnet->grdSize* sizeof(mpz_t));
@@ -194,7 +194,7 @@ void VNET_Config(DscVNet *vnet)
 
       for (int j = 0; j < vnet->grdSize; j++) {
          vnet->Users[i].plainLocalVector[j]= rand_uint64();
-         mpz_init2(vnet->Users[i].k_p[j],sizeof(unsigned long)*8);
+         mpz_init2(vnet->Users[i].k_p[j],sizeof(uint32_t)*8);
          mpz_init(vnet->Users[i].k_s_i[j]);
 
          mpz_inits(vnet->Users[i].maskedLocalVector[j],vnet->Users[i].maskTag[j],NULL);
@@ -292,8 +292,8 @@ void VNET_Mask(DscVNet *vnet, uint16_t i)
       exit(1);
    }
 
-   unsigned long *prgArray = malloc(vnet->grdSize * sizeof(unsigned long));
-   unsigned long *prgArrayTag = malloc(vnet->grdSize * sizeof(unsigned long));
+   uint32_t *prgArray = malloc(vnet->grdSize * sizeof(uint32_t));
+   uint32_t *prgArrayTag = malloc(vnet->grdSize * sizeof(uint32_t));
    
    //generate k_p
    uint8_t str1 [6]={0};
@@ -302,12 +302,12 @@ void VNET_Mask(DscVNet *vnet, uint16_t i)
    str1[2] = (vnet->rndlbl >> 8) & 0xFF;
    str1[3] = vnet->rndlbl & 0xFF;
 
-   unsigned long randomOutput[GRAD_SIZE];
+   uint32_t randomOutput[GRAD_SIZE];
    uint8_t t[32];
    PRF(t,vnet->vk,sizeof(vnet->vk),str1,sizeof(str1));
    PRG((uint8_t*)randomOutput,sizeof(randomOutput),t);
    for(int j=0;j<GRAD_SIZE;j++){
-      mpz_set_ui(vnet->Users[i].k_p[j],((unsigned long*)randomOutput)[j]);
+      mpz_set_ui(vnet->Users[i].k_p[j],randomOutput[j]);
       mpz_mod(vnet->Users[i].k_p[j],vnet->Users[i].k_p[j],vnet->grp.prime);
    }
 
@@ -318,7 +318,7 @@ void VNET_Mask(DscVNet *vnet, uint16_t i)
    PRF(t,vnet->vk,sizeof(vnet->vk),str1,sizeof(str1));
    PRG((uint8_t*)randomOutput,sizeof(randomOutput),t);
    for(int j=0;j<GRAD_SIZE;j++){
-      mpz_set_ui(vnet->Users[i].k_s_i[j],((unsigned long*)randomOutput)[j]);
+      mpz_set_ui(vnet->Users[i].k_s_i[j],randomOutput[j]);
       mpz_mod(vnet->Users[i].k_s_i[j],vnet->Users[i].k_s_i[j],vnet->grp.prime);
    }
 
@@ -326,9 +326,9 @@ void VNET_Mask(DscVNet *vnet, uint16_t i)
       if(z==i || vnet->Uact1[z]==0)
          continue;
       // Mask Gradient prgArray = G(s_i,z)
-      PRG((uint8_t*)prgArray,GRAD_SIZE*sizeof(unsigned long),vnet->Users[i].sdata[z].val);
+      PRG((uint8_t*)prgArray,GRAD_SIZE*sizeof(uint32_t),vnet->Users[i].sdata[z].val);
       // Mask Tag prgArrayTag = G(s hat_i,z)
-      PRG((uint8_t*)prgArrayTag,GRAD_SIZE*sizeof(unsigned long),vnet->Users[i].sverify[z].val);
+      PRG((uint8_t*)prgArrayTag,GRAD_SIZE*sizeof(uint32_t),vnet->Users[i].sverify[z].val);
 
       if(z>i){
          for (int j = 0; j < vnet->grdSize; j++) {
@@ -353,7 +353,7 @@ void VNET_Mask(DscVNet *vnet, uint16_t i)
    char *betaMasked;
    size_t betaMaskedSize = mpz_to_byteArray(&betaMasked, vnet->Users[i].betaMasked);
    padWithZero(&betaMasked, betaMaskedSize, 32);
-   PRG((uint8_t*)prgArray,GRAD_SIZE*sizeof(unsigned long),(uint8_t*)betaMasked);
+   PRG((uint8_t*)prgArray,GRAD_SIZE*sizeof(uint32_t),(uint8_t*)betaMasked);
    free(betaMasked);
 
    for (int j = 0; j < vnet->grdSize; j++) {
@@ -366,7 +366,7 @@ void VNET_Mask(DscVNet *vnet, uint16_t i)
    char* betatag;
    size_t betatagSize = mpz_to_byteArray(&betatag, vnet->Users[i].betaVerify);
    padWithZero(&betatag, betatagSize, 32);
-   PRG((uint8_t*)prgArrayTag,GRAD_SIZE*sizeof(unsigned long),(uint8_t*)betatag);
+   PRG((uint8_t*)prgArrayTag,GRAD_SIZE*sizeof(uint32_t),(uint8_t*)betatag);
    free(betatag);
 
    for (int j = 0; j < vnet->grdSize; j++) {
@@ -447,8 +447,8 @@ void VNET_UNMask(DscVNet *vnet)
      vnet->Users[i].P.blocks = 0;
    }
 
-   unsigned long *prgArray = malloc(vnet->grdSize * sizeof(unsigned long));
-   unsigned long *prgArrayTag = malloc(vnet->grdSize * sizeof(unsigned long));
+   uint32_t *prgArray = malloc(vnet->grdSize * sizeof(uint32_t));
+   uint32_t *prgArrayTag = malloc(vnet->grdSize * sizeof(uint32_t));
 
    for(int k=0;k<vnet->grdSize;k++){
       mpz_init(vnet->tagGlobalVector[k]);
@@ -462,14 +462,14 @@ void VNET_UNMask(DscVNet *vnet)
       char *betaMasked;
       size_t betaMaskedSize = mpz_to_byteArray(&betaMasked, vnet->Users[i].betaMasked);
       padWithZero(&betaMasked, betaMaskedSize, 32);
-      PRG((uint8_t*)prgArray,GRAD_SIZE*sizeof(unsigned long),(uint8_t*)betaMasked);
+      PRG((uint8_t*)prgArray,GRAD_SIZE*sizeof(uint32_t),(uint8_t*)betaMasked);
       free(betaMasked);
 
       // generate G( prgArrayTag = beta hat_i)
       char* betatag;
       size_t betatagSize = mpz_to_byteArray(&betatag, vnet->Users[i].betaVerify);
       padWithZero(&betatag, betatagSize, 32);
-      PRG((uint8_t*)prgArrayTag,GRAD_SIZE*sizeof(unsigned long),(uint8_t*)betatag);
+      PRG((uint8_t*)prgArrayTag,GRAD_SIZE*sizeof(uint32_t),(uint8_t*)betatag);
       free(betatag);
       
       for (int j = 0; j < vnet->grdSize; j++){
@@ -489,10 +489,10 @@ void VNET_UNMask(DscVNet *vnet)
          if(z==i || vnet->Uact1[z]==0)
             continue;
          // Mask Gradient prgArray = G(s_i,z)
-         PRG((uint8_t*)prgArray,GRAD_SIZE*sizeof(unsigned long),vnet->Users[i].sdata[z].val);
+         PRG((uint8_t*)prgArray,GRAD_SIZE*sizeof(uint32_t),vnet->Users[i].sdata[z].val);
 
          // Mask Tag prgArrayTag = G(s hat_i,z)
-         PRG((uint8_t*)prgArrayTag,GRAD_SIZE*sizeof(unsigned long),vnet->Users[i].sverify[z].val);
+         PRG((uint8_t*)prgArrayTag,GRAD_SIZE*sizeof(uint32_t),vnet->Users[i].sverify[z].val);
 
          if(z>i){
             for (int j = 0; j < vnet->grdSize; j++) {
@@ -526,13 +526,13 @@ void VNET_Vrfy(DscVNet *vnet)
    str1[2] = (vnet->rndlbl >> 8) & 0xFF;
    str1[3] = vnet->rndlbl & 0xFF;
    mpz_t *k_p = malloc(GRAD_SIZE*sizeof(mpz_t));
-   unsigned long randomOutput[GRAD_SIZE];
+   uint32_t randomOutput[GRAD_SIZE];
 
    uint8_t t[32];
    PRF(t,vnet->vk,sizeof(vnet->vk),str1,sizeof(str1));
    PRG((uint8_t*)randomOutput,sizeof(randomOutput),t);
    for(int j=0;j<GRAD_SIZE;j++){
-      mpz_init_set_ui(k_p[j],((unsigned long*)randomOutput)[j]);
+      mpz_init_set_ui(k_p[j],randomOutput[j]);
    }
    mpz_t** k_s_i = (mpz_t**) malloc(USERS_SIZE*sizeof(mpz_t*));
 
@@ -546,7 +546,7 @@ void VNET_Vrfy(DscVNet *vnet)
       PRF(t,vnet->vk,sizeof(vnet->vk),str1,sizeof(str1));
       PRG((uint8_t*) randomOutput,sizeof(randomOutput),t);
       for(int j=0;j<GRAD_SIZE;j++){
-         mpz_init_set_ui(k_s_i[user][j],((unsigned long*)randomOutput)[j]);
+         mpz_init_set_ui(k_s_i[user][j],randomOutput[j]);
       }
    }
 
@@ -608,7 +608,7 @@ int main()
 
   DscTimeMeasure timemeasure;
 
-  uint32_t size = GRAD_SIZE * sizeof(unsigned long);
+  uint32_t size = GRAD_SIZE * sizeof(uint32_t);
 
   printf("\n** Dropout = %f, n = %d, gradient size: %d**\n",(float)DropOut,USERS_SIZE,GRAD_SIZE);
   DscVNet vnet;
