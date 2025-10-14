@@ -586,7 +586,7 @@ void ThrCrypt_Dec_Block(DscThrCrypt *thrcrypt, uint32_t blockNumber)
   mpz_clears(s,m,NULL);;
 }
 void ThrCrypt_Free(DscThrCrypt *thrcrypt) {
-  for (int i = 0; i < thrcrypt->thss.threshold; i++) {
+  for (int i = 0; i < thrcrypt->thss.num_shares; i++) {
     mpz_clear(thrcrypt->thss.shares_x[i]);
     mpz_clear(thrcrypt->thss.shares_y[i]);
   }
