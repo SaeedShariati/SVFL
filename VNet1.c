@@ -534,19 +534,20 @@ void VNET_Vrfy(DscVNet *vnet)
    for(int j=0;j<GRAD_SIZE;j++){
       mpz_init_set_ui(k_p[j],randomOutput[j]);
    }
-   mpz_t** k_s_i = (mpz_t**) malloc(USERS_SIZE*sizeof(mpz_t*));
-
+   mpz_t* k_s = malloc(GRAD_SIZE*sizeof(mpz_t));
+   for(int j=0;j<GRAD_SIZE;j++){
+      mpz_init(k_s[j]);
+   }
    for(uint16_t user=0;user<vnet->numClients;user++){
-      if(vnet->Uact1[user]==0)
+      if(vnet->Uact2[user]==0)
          continue;
       str1[4] = (user>>8)&0xFF;
       str1[5] = user & 0xFF;
-      k_s_i[user] = (mpz_t *)malloc(GRAD_SIZE*sizeof(mpz_t));
 
       PRF(t,vnet->vk,sizeof(vnet->vk),str1,sizeof(str1));
       PRG((uint8_t*) randomOutput,sizeof(randomOutput),t);
       for(int j=0;j<GRAD_SIZE;j++){
-         mpz_init_set_ui(k_s_i[user][j],randomOutput[j]);
+         mpz_add_ui(k_s[j],k_s[j],randomOutput[j]); 
       }
    }
 
@@ -555,15 +556,10 @@ void VNET_Vrfy(DscVNet *vnet)
    for(int j =0;j<vnet->grdSize;j++){
       mpz_init(tagPrime[j]);
       mpz_addmul(tagPrime[j],k_p[j],vnet->gradGlobalVector[j]);
+      mpz_add(tagPrime[j],tagPrime[j],k_s[j]);
+      mpz_clear(k_s[j]);
    }
-   for(int user=0;user<vnet->numClients;user++){
-      if(vnet->Uact2[user]==0)
-         continue;
-      for(int k=0;k<vnet->grdSize;k++){
-         mpz_add(tagPrime[k],tagPrime[k],k_s_i[user][k]);
-      }
-   }
-
+   free(k_s);
    for(int k=0;k<vnet->grdSize;k++){
       //gmp_printf("tagPrime[%d] = %Zd\n",k,tagPrime[k]);
       //gmp_printf("tagGlobal[%d] = %Zd\n",k,vnet->tagGlobalVector[k]);
