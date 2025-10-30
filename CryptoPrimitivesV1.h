@@ -1,6 +1,5 @@
 #ifndef CryptoPrimitivesV1
 #define CryptoPrimitivesV1
-
 #include <gmp.h>
 #include <pbc/pbc.h>
 #include <stdbool.h>
@@ -156,7 +155,7 @@ typedef struct{
     long seconds;
     long milliseconds;
     long microseconds;
-    long nanoseconds;
+    int64_t nanoseconds;
 }DscTimeMeasure;
 /*===========================================================================================*/
 /*============================ Space measurement structure ==================================*/

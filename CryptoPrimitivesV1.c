@@ -25,6 +25,7 @@ void Time_Measure(DscTimeMeasure *time) {
 
   time->milliseconds = time->seconds * 1000 + time->nanoseconds / 1000000;
   time->microseconds = time->seconds * 1000000 + time->nanoseconds / 1000;
+  time->nanoseconds = time->seconds*1000000000 + time->nanoseconds;
 }
 // ############################################
 
