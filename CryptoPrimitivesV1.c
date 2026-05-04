@@ -88,7 +88,6 @@ static void print(char* a, uint32_t size)
 }
 // commitment = Hash256(skey||value)
 void commit(mpz_ptr skey,mpz_ptr value,char** commitment){
-  register_hash(&sha256_desc);
   *commitment = malloc(32);
   char* skey_b,*value_b;
   int skey_size = mpz_to_byteArray(&skey_b,skey);
