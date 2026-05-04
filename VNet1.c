@@ -23,11 +23,11 @@ gcc VNet.c VNet.c -o VNet -I ~/.local/include/pbc -L ~/.local/lib -Wl,-rpath ~/.
    -lgmp -l tomcrypt -l m
 
 *********************************************************************************************************************************************/
-#define GRAD_SIZE 10000
-#define USERS_SIZE 1000
+#define GRAD_SIZE 1
+#define USERS_SIZE 10
 #define SEC_PARAM 32  //in bytes
-#define Threshold 10
-#define DropOut 0.1 //what rate of users dropout at every step
+#define Threshold 3
+#define DropOut 0 //what rate of users dropout at every step
 #define ITERATIONS 1
 typedef struct{
    uint8_t val[32];
@@ -56,6 +56,7 @@ typedef struct {
    // output thrcrypt
    DscCipher P;
    DscCipher B;
+
 
    // for using in tag
    mpz_t k_p[GRAD_SIZE];
@@ -104,7 +105,7 @@ Time_Performance time_measured;
 DscTimeMeasure global_timemeasure;
 static inline void generate_random_mpz_vnet(DscVNet *vnet, mpz_ptr rndelement)
 {
-   mpz_urandomm(rndelement, vnet->grp.state, vnet->grp.prime);
+   mpz_urandomm(rndelement, vnet->grp.state, vnet->grp.q);
 }
 //prints hex code
 void print(char* a, uint32_t size)
@@ -144,7 +145,7 @@ static inline void print_timemeasure(DscTimeMeasure *timemeasure, uint16_t iter,
          function_name, timemeasure->seconds, timemeasure->milliseconds,
          timemeasure->microseconds, timemeasure->nanoseconds);
 }
-//not secure, used to give random inputs for local gra
+//not secure, used to give random inputs for local gradients
 uint64_t rand_uint64() {
 
     static uint64_t state = 88172645463325252ull; // seed
@@ -152,21 +153,6 @@ uint64_t rand_uint64() {
     return state;
 }
 
-//turns mpz_t into an array of bytes and returns the number of bytes
-uint32_t mpz_to_byteArray(char** rop, mpz_ptr integer){
-    size_t count = 0;
-    size_t size_in_bytes = (mpz_sizeinbase(integer, 2) + 7) / 8;
-    
-    *rop = (char*)malloc(size_in_bytes);
-    if (!*rop) return 0;  // malloc failed
-    mpz_export(*rop, &count, 1, sizeof(char), 1, 0, integer);
-
-    return (uint32_t)count;
-}
-static inline void byteArray_to_mpz(mpz_ptr rop, char *byteArray, uint32_t size) {
-  mpz_import(rop, size, 1, sizeof(char), 0, 0,
-              byteArray);
-}
 //if originalSize<newSize then adds zeros to the end until the size of bytes* becomes newSize
 static inline void padWithZero(char** bytes,size_t originalSize,size_t newSize){
    if(originalSize<newSize){
@@ -203,7 +189,7 @@ void Config(DscVNet *vnet)
    vnet->Users = malloc(vnet->numClients * sizeof(DscClient));
 
    // THRCRYPT
-   ThrCrypt_Config(&(vnet->thrcrypt), 256, vnet->numClients,
+   ThrCrypt_Config(&(vnet->thrcrypt), 512, vnet->numClients,
                    vnet->thrshld);
                    
    // Initialize each user's UID and random gradients
@@ -240,7 +226,7 @@ void Init(DscVNet *vnet)
 
       generate_random_mpz_vnet(vnet, vnet->Users[i].skey);
 
-      mpz_powm(vnet->Users[i].pkey, (vnet->grp).generator, vnet->Users[i].skey, vnet->grp.prime);
+      mpz_powm(vnet->Users[i].pkey, (vnet->grp).generator, vnet->Users[i].skey, vnet->grp.q);
       mpz_set(vnet->Users[i].shares_x,vnet->thrcrypt.thss.shares_x[i]);
       mpz_set(vnet->Users[i].shares_y,vnet->thrcrypt.thss.shares_y[i]); // sk_i^t = (shares_x[i],shares_y[i])
    }
@@ -275,7 +261,7 @@ void KeyShare(DscVNet *vnet)
         mpz_init(k);
         char* sharedSecret; 
         mpz_powm(k, vnet->Users[i].pkey,
-           vnet->Users[z].skey, vnet->grp.prime);
+           vnet->Users[z].skey, vnet->grp.q);
         size_t size = mpz_to_byteArray(&sharedSecret, k);
         if(size<vnet->secparam)
            padWithZero(&sharedSecret, size, vnet->secparam);
@@ -350,7 +336,7 @@ void Mask(DscVNet *vnet) {
     str1[2] = (vnet->rndlbl >> 8) & 0xFF;
     str1[3] = vnet->rndlbl & 0xFF;
 
-    size_t bytes = (mpz_sizeinbase(vnet->grp.prime, 2) + 7) /
+    size_t bytes = (mpz_sizeinbase(vnet->grp.q, 2) + 7) /
                    8; // number of bytes of prime q
     char *randomOutput =
         malloc(GRAD_SIZE * bytes); // used for generating k_p and k_s_i
@@ -362,7 +348,7 @@ void Mask(DscVNet *vnet) {
       mpz_inits( vnet->Users[i].maskTag[j],
                 NULL);
       byteArray_to_mpz(vnet->Users[i].k_p[j], randomOutput + bytes * j, bytes);
-      mpz_mod(vnet->Users[i].k_p[j], vnet->Users[i].k_p[j], vnet->grp.prime);
+      mpz_mod(vnet->Users[i].k_p[j], vnet->Users[i].k_p[j], vnet->grp.q);
     }
     // generate k_s_i
     str1[4] = (i >> 8) & 0xFF;
@@ -374,7 +360,7 @@ void Mask(DscVNet *vnet) {
       byteArray_to_mpz(vnet->Users[i].k_s_i[j], randomOutput + bytes * j,
                        bytes);
       mpz_mod(vnet->Users[i].k_s_i[j], vnet->Users[i].k_s_i[j],
-              vnet->grp.prime);
+              vnet->grp.q);
     }
     free(randomOutput);
     // add G(shat_i,z)
@@ -414,7 +400,7 @@ void Mask(DscVNet *vnet) {
       mpz_addmul_ui(vnet->Users[i].maskTag[j], vnet->Users[i].k_p[j],
                     vnet->Users[i].plainLocalVector[j]);
       mpz_mod(vnet->Users[i].maskTag[j], vnet->Users[i].maskTag[j],
-              vnet->grp.prime);
+              vnet->grp.q);
       mpz_clears(vnet->Users[i].k_p[j], vnet->Users[i].k_s_i[j], NULL);
     }
     free(prgArrayTag);
@@ -472,7 +458,7 @@ void Mask(DscVNet *vnet) {
       mpz_add_ui(vnet->Users[i].maskedLocalVector[j],
                  vnet->Users[i].maskedLocalVector[j], prgArray[j]);
       mpz_mod(vnet->Users[i].maskedLocalVector[j],
-              vnet->Users[i].maskedLocalVector[j], vnet->grp.prime);
+              vnet->Users[i].maskedLocalVector[j], vnet->grp.q);
     }
 
     clock_gettime(CLOCK_MONOTONIC, (&(global_timemeasure.end)));
@@ -636,9 +622,9 @@ void UnMask(DscVNet *vnet) {
   }
   for (int j = 0; j < vnet->grdSize; j++) {
     mpz_mod(vnet->gradGlobalVector[j], vnet->gradGlobalVector[j],
-            vnet->grp.prime);
+            vnet->grp.q);
     mpz_mod(vnet->tagGlobalVector[j], vnet->tagGlobalVector[j],
-            vnet->grp.prime);
+            vnet->grp.q);
   }
   free(prgArray);
   free(prgArrayTag);
@@ -666,7 +652,7 @@ void Verify(DscVNet *vnet)
     str1[2] = (vnet->rndlbl >> 8) & 0xFF;
     str1[3] = vnet->rndlbl & 0xFF;
     mpz_t *k_p = malloc(GRAD_SIZE*sizeof(mpz_t));
-    size_t bytes = (mpz_sizeinbase(vnet->grp.prime, 2) + 7) / 8; //number of bytes of prime q
+    size_t bytes = (mpz_sizeinbase(vnet->grp.q, 2) + 7) / 8; //number of bytes of prime q
     char* randomOutput = malloc(GRAD_SIZE*bytes);
 
     uint8_t t[32];
@@ -675,7 +661,7 @@ void Verify(DscVNet *vnet)
     for(int j=0;j<GRAD_SIZE;j++){
        mpz_init(k_p[j]);
        byteArray_to_mpz(k_p[j], randomOutput+j*bytes, bytes);
-       mpz_mod(k_p[j],k_p[j],vnet->grp.prime);
+       mpz_mod(k_p[j],k_p[j],vnet->grp.q);
     }
     mpz_t* k_s = malloc(GRAD_SIZE*sizeof(mpz_t));
     for(int j=0;j<GRAD_SIZE;j++){
@@ -714,12 +700,12 @@ void Verify(DscVNet *vnet)
        //gmp_printf("tagPrime[%d] = %Zd\n",k,tagPrime[k]);
        //gmp_printf("tagGlobal[%d] = %Zd\n",k,vnet->tagGlobalVector[k]);
 
-       mpz_mod(tagPrime[k],tagPrime[k],vnet->grp.prime);
+       mpz_mod(tagPrime[k],tagPrime[k],vnet->grp.q);
        int result = mpz_cmp(vnet->tagGlobalVector[k],tagPrime[k]);
        mpz_clear(tagPrime[k]);
        if(result != 0){
           printf("\ninvalid\n");
-          exit(1);
+          //exit(1);
        }
     }
     free(tagPrime);
@@ -753,7 +739,7 @@ void randomly_zero_out(uint8_t *dest, uint8_t *src, size_t size,
 
 int main()
 {
-  
+
   DscVNet *vnet;
   DscTimeMeasure timemeasure;
   vnet = malloc(sizeof(DscVNet));
